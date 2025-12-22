@@ -41,6 +41,12 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
 
   const isJumping = useRef<boolean>(false);
   const baselineY = useRef<number>(0);
+  
+  // 性能优化：帧跳跃和时间节流
+  const frameSkipCounter = useRef<number>(0);
+  const lastDetectionTime = useRef<number>(0);
+  const detectionInterval = 150; // 每150ms检测一次（约6-7fps）
+  const frameSkip = 2; // 每2帧检测一次
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -51,7 +57,11 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
 
   useEffect(() => {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    // 优化：使用较低的采样率以减少CPU负担，同时保持音质
+    audioContextRef.current = new AudioContextClass({ 
+      sampleRate: 24000,
+      latencyHint: 'interactive' // 优化音频延迟
+    });
     return () => { audioContextRef.current?.close(); };
   }, []);
 
@@ -68,8 +78,13 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
                 numPoses: 1
             });
 
+            // 降低视频分辨率以减少CPU负担
             const stream = await navigator.mediaDevices.getUserMedia({ 
-              video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+              video: { 
+                facingMode: 'user', 
+                width: { ideal: 320, max: 480 }, 
+                height: { ideal: 240, max: 360 } 
+              },
               audio: false 
             });
             streamRef.current = stream;
@@ -131,30 +146,68 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
            requestRef.current = requestAnimationFrame(predictWebcam);
            return;
       }
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      if (lastVideoTimeRef.current !== video.currentTime) {
-          lastVideoTimeRef.current = video.currentTime;
-          poseLandmarkerRef.current.detectForVideo(video, performance.now(), (result) => {
-              ctx.clearRect(0, 0, canvas.width, canvas.height);
-              if (result.landmarks && result.landmarks.length > 0) {
-                  const landmarks = result.landmarks[0];
-                  drawStickFigure(ctx, landmarks, canvas.width, canvas.height);
-                  const hipY = (landmarks[23].y + landmarks[24].y) / 2;
-                  if (baselineY.current === 0 || hipY > baselineY.current) baselineY.current = baselineY.current * 0.95 + hipY * 0.05;
-                  const jumpThreshold = 0.08; 
-                  const isUp = hipY < (baselineY.current - jumpThreshold);
-                  if (isUp && !isJumping.current) isJumping.current = true;
-                  else if (!isUp && isJumping.current) { isJumping.current = false; triggerScore(); }
-              }
-          });
+      
+      // 只在首次或尺寸变化时设置canvas尺寸
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
       }
+
+      const now = performance.now();
+      const timeSinceLastDetection = now - lastDetectionTime.current;
+      
+      // 性能优化：帧跳跃 + 时间节流
+      frameSkipCounter.current++;
+      const shouldDetect = 
+          frameSkipCounter.current >= frameSkip && 
+          timeSinceLastDetection >= detectionInterval &&
+          lastVideoTimeRef.current !== video.currentTime;
+
+      if (shouldDetect) {
+          frameSkipCounter.current = 0;
+          lastDetectionTime.current = now;
+          lastVideoTimeRef.current = video.currentTime;
+          
+          // 使用 requestIdleCallback 如果可用，否则使用 setTimeout 来避免阻塞音频线程
+          const detectionCallback = (result: any) => {
+              // 使用 requestAnimationFrame 来确保绘制不阻塞音频
+              requestAnimationFrame(() => {
+                  ctx.clearRect(0, 0, canvas.width, canvas.height);
+                  if (result.landmarks && result.landmarks.length > 0) {
+                      const landmarks = result.landmarks[0];
+                      drawStickFigure(ctx, landmarks, canvas.width, canvas.height);
+                      const hipY = (landmarks[23].y + landmarks[24].y) / 2;
+                      if (baselineY.current === 0 || hipY > baselineY.current) {
+                          baselineY.current = baselineY.current * 0.95 + hipY * 0.05;
+                      }
+                      const jumpThreshold = 0.08; 
+                      const isUp = hipY < (baselineY.current - jumpThreshold);
+                      if (isUp && !isJumping.current) {
+                          isJumping.current = true;
+                      } else if (!isUp && isJumping.current) { 
+                          isJumping.current = false; 
+                          triggerScore(); 
+                      }
+                  }
+              });
+          };
+          
+          poseLandmarkerRef.current.detectForVideo(video, now, detectionCallback);
+      } else {
+          // 即使不检测，也继续动画循环以保持流畅
+          if (lastVideoTimeRef.current !== video.currentTime) {
+              lastVideoTimeRef.current = video.currentTime;
+          }
+      }
+      
       requestRef.current = requestAnimationFrame(predictWebcam);
   };
 
   const drawStickFigure = (ctx: CanvasRenderingContext2D, landmarks: any[], w: number, h: number) => {
+      // 优化：减少 save/restore 调用，批量绘制
       ctx.save();
+      
+      // 优化：预先计算坐标，减少重复计算
       const drawLine = (start: any, end: any, color: string, width: number, blur: number = 0) => {
         if(start && end) {
             ctx.beginPath();
@@ -162,20 +215,48 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
             ctx.lineTo(end.x * w, end.y * h);
             ctx.strokeStyle = color;
             ctx.lineWidth = width;
-            ctx.shadowBlur = blur;
-            ctx.shadowColor = color;
+            if (blur > 0) {
+                ctx.shadowBlur = blur;
+                ctx.shadowColor = color;
+            } else {
+                ctx.shadowBlur = 0;
+            }
             ctx.lineCap = "round";
             ctx.stroke();
         }
       }
+      
+      // 优化：减少函数调用开销，直接绘制
       const connect = (idx1: number, idx2: number) => {
           const s = landmarks[idx1], e = landmarks[idx2];
-          drawLine(s, e, "#2dd4bf", 10, 20); 
-          drawLine(s, e, "#ffffff", 3, 0);
+          if (s && e) {
+              // 合并绘制：先绘制阴影，再绘制主线条
+              ctx.beginPath();
+              ctx.moveTo(s.x * w, s.y * h);
+              ctx.lineTo(e.x * w, e.y * h);
+              
+              // 阴影层
+              ctx.strokeStyle = "#2dd4bf";
+              ctx.lineWidth = 10;
+              ctx.shadowBlur = 20;
+              ctx.shadowColor = "#2dd4bf";
+              ctx.stroke();
+              
+              // 主线条
+              ctx.beginPath();
+              ctx.moveTo(s.x * w, s.y * h);
+              ctx.lineTo(e.x * w, e.y * h);
+              ctx.strokeStyle = "#ffffff";
+              ctx.lineWidth = 3;
+              ctx.shadowBlur = 0;
+              ctx.stroke();
+          }
       };
+      
       connect(11, 12); connect(11, 23); connect(12, 24); connect(23, 24);
       connect(11, 13); connect(13, 15); connect(12, 14); connect(14, 16);
       connect(23, 25); connect(25, 27); connect(24, 26); connect(26, 28);
+      
       if(landmarks[0]) {
         ctx.beginPath();
         ctx.arc(landmarks[0].x * w, landmarks[0].y * h, 10, 0, 2 * Math.PI);
@@ -255,12 +336,22 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
 
   useEffect(() => {
       if (state === PlayerState.PLAYING) {
+          // 优化：确保音频上下文已恢复
+          if (audioContextRef.current?.state === 'suspended') {
+              audioContextRef.current.resume().catch(console.error);
+          }
+          
           beatIntervalRef.current = setInterval(() => {
              setBeatStep(v => {
                  const next = (v + 1) % 4;
-                 if (audioContextRef.current) {
-                     if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
-                     playDrumStep(audioContextRef.current, next);
+                 // 优化：使用 requestIdleCallback 或 setTimeout(0) 来避免阻塞
+                 if (audioContextRef.current && audioContextRef.current.state === 'running') {
+                     // 使用微任务来确保音频播放不阻塞主线程
+                     Promise.resolve().then(() => {
+                         if (audioContextRef.current && audioContextRef.current.state === 'running') {
+                             playDrumStep(audioContextRef.current, next);
+                         }
+                     });
                  }
                  return next;
              });

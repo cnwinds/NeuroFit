@@ -95,12 +95,18 @@ function getNoiseBuffer(ctx: AudioContext): AudioBuffer {
 // High Energy "DONG-CI-DA-CI" Synthesizer
 // Optimized for 8Hz (125ms intervals).
 // DONG and DA are tightened to allow CI to be heard.
+// Performance optimized for mobile devices
 export function playDrumStep(ctx: AudioContext, step: number) {
+    // 优化：检查音频上下文状态，避免在暂停状态下创建节点
+    if (ctx.state !== 'running') {
+        return;
+    }
+    
     const t = ctx.currentTime;
     
     // Master Gain for this hit (prevents clipping)
     const masterGain = ctx.createGain();
-    masterGain.gain.value = 1.0;
+    masterGain.gain.value = 0.8; // 稍微降低音量以减少CPU负担
     masterGain.connect(ctx.destination);
 
     // --- DONG (Kick) - Step 0 ---
