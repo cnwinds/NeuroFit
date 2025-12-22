@@ -30,17 +30,17 @@ interface AudioConstants {
 
 const AUDIO_CONSTANTS: AudioConstants = {
   DEFAULT_SAMPLE_RATE: 24000,
-  DRUM_STEP_DURATION: 0.12,
+  DRUM_STEP_DURATION: 0.08, // 缩短到80ms，避免重叠和卡顿
   DRUM_STEP_COUNT: 4,
   NOISE_BUFFER_DURATION: 2,
   MAX_BUFFER_LENGTH: 44100 * 2, // 最大2秒@44.1kHz
 } as const;
 
 const DRUM_STEP_VOLUMES: Record<DrumStep, number> = {
-  0: 1.0,   // DONG - 最响
-  1: 0.75,  // CI - 稍轻但清晰
-  2: 0.9,   // DA - 次响
-  3: 0.75,  // CI - 稍轻但清晰
+  0: 1.0,   // DONG - 浑厚有力，最响
+  1: 0.45,  // CI - 清脆但不抢戏，降低音量
+  2: 0.80,  // DA - 中等力度
+  3: 0.40,  // CI - 更轻，形成渐弱效果
 } as const;
 
 // ============================================================================
@@ -227,39 +227,64 @@ export function playSuccessSound(ctx: AudioContext): void {
 // ============================================================================
 
 /**
- * 生成 DONG (咚) - 深沉有力的低音
+ * 生成 DONG (咚) - 极致浑厚的低音
+ * 增强版：更多的低频成分，更长的共鸣
+ * 基于 A0 音（27.5Hz），最低的钢琴音
  */
 function generateDongSound(
   data: Float32Array,
   sampleRate: number,
   bufferLength: number
 ): void {
-  const kickDuration = 0.1;
-  const kickSamples = Math.min(Math.ceil(sampleRate * kickDuration), bufferLength);
+  const duration = 0.15; // 延长到150ms，让低频更持久
+  const samples = Math.min(Math.ceil(sampleRate * duration), bufferLength);
   
-  // 主低音：频率从80Hz快速下降到40Hz
-  for (let i = 0; i < kickSamples; i++) {
+  // 基础音：A0（27.5Hz），极低频，震撼有力
+  const fundamental = 27.5;
+  
+  for (let i = 0; i < samples; i++) {
     const t = i / sampleRate;
-    const freq = 80 * Math.pow(0.5, t / kickDuration); // 40/80 = 0.5
-    const phase = 2 * Math.PI * freq * t;
-    const gain = 1.5 * Math.exp(-t * 20);
-    data[i] += Math.sin(phase) * gain;
-  }
-  
-  // 瞬态冲击：让"咚"更清晰
-  const attackDuration = 0.005;
-  const attackSamples = Math.min(Math.ceil(sampleRate * attackDuration), bufferLength);
-  
-  for (let i = 0; i < attackSamples; i++) {
-    const t = i / sampleRate;
-    const phase = 2 * Math.PI * 200 * t;
-    const gain = 0.4 * Math.exp(-t * 200);
-    data[i] += Math.sin(phase) * gain;
+    const progress = i / samples; // 归一化进度 0-1
+    
+    // ADSR 包络：瞬时attack，更长decay，平滑release
+    const attack = Math.min(t / 0.002, 1.0); // 2ms 快速attack
+    const decay = Math.exp(-t * 8); // 更慢的衰减，增加共鸣感
+    
+    // 添加平滑的 release，避免尾部爆破音
+    // 最后 10% 做淡出处理
+    const release = progress > 0.9 ? (1 - (progress - 0.9) / 0.1) : 1.0;
+    const envelope = attack * decay * release;
+    
+    // 1. Ultra Sub Bass（13.75Hz）- 极深的震动感
+    const phaseUltraSub = 2 * Math.PI * (fundamental * 0.5) * t;
+    data[i] += Math.sin(phaseUltraSub) * envelope * 0.8;
+    
+    // 2. Sub Bass（A0: 27.5Hz）- 深沉的底部
+    const phaseSub = 2 * Math.PI * fundamental * t;
+    data[i] += Math.sin(phaseSub) * envelope * 1.8;
+    
+    // 3. 基频（A1: 55Hz）- 主要能量
+    const phase1 = 2 * Math.PI * (fundamental * 2) * t;
+    data[i] += Math.sin(phase1) * envelope * 1.5;
+    
+    // 4. 二次泛音（A2: 110Hz）- 增加厚度
+    const phase2 = 2 * Math.PI * (fundamental * 4) * t;
+    data[i] += Math.sin(phase2) * envelope * 0.8;
+    
+    // 5. 三次泛音（E3: 165Hz）- 增加共鸣
+    const phase3 = 2 * Math.PI * (fundamental * 6) * t;
+    data[i] += Math.sin(phase3) * envelope * 0.4;
+    
+    // 6. 轻微的punch频率（80Hz）- 降低punch频率，更浑厚
+    const phasePunch = 2 * Math.PI * 80 * t;
+    data[i] += Math.sin(phasePunch) * envelope * 0.3 * Math.exp(-t * 40);
   }
 }
 
 /**
- * 生成 CI (嚓) - 清脆明亮的高音
+ * 生成 CI (嚓) - 温暖的中高音点缀
+ * 重新设计：降低频率，增加温暖感，融入整体浑厚音色
+ * 基于 A4 音（440Hz），标准音高A，温暖协调
  */
 function generateCiSound(
   data: Float32Array,
@@ -267,34 +292,44 @@ function generateCiSound(
   bufferLength: number,
   noiseData: Float32Array
 ): void {
-  const hihatDuration = 0.06;
-  const hihatSamples = Math.min(Math.ceil(sampleRate * hihatDuration), bufferLength);
+  const duration = 0.045; // 45ms，稍长一点增加厚度
+  const samples = Math.min(Math.ceil(sampleRate * duration), bufferLength);
   
-  // 高频噪声（主要部分）
-  for (let i = 0; i < hihatSamples; i++) {
+  // 音乐音调：A4（440Hz），温暖的中高音，与A0形成八度关系
+  const fundamental = 440;
+  
+  for (let i = 0; i < samples; i++) {
     const t = i / sampleRate;
-    const gain = 0.9 * Math.exp(-t * 30);
-    const noiseIndex = (i * 3) % noiseData.length;
-    // 高通滤波效果：增强高频，减弱低频
-    const filteredNoise = noiseData[noiseIndex] * (0.5 + 0.5 * (1 - Math.exp(-t * 150)));
-    data[i] += filteredNoise * gain;
-  }
-  
-  // 添加轻微的音调（让"嚓"更有特色）
-  const toneDuration = 0.03;
-  const toneSamples = Math.min(Math.ceil(sampleRate * toneDuration), bufferLength);
-  
-  for (let i = 0; i < toneSamples; i++) {
-    const t = i / sampleRate;
-    const freq = 8000 * (1 - t * 0.3); // 轻微下降
-    const phase = 2 * Math.PI * freq * t;
-    const gain = 0.15 * Math.exp(-t * 40);
-    data[i] += Math.sin(phase) * gain;
+    
+    // 快速attack和decay，但保持温暖
+    const attack = Math.min(t / 0.001, 1.0); // 1ms attack
+    const decay = Math.exp(-t * 45); // 适中衰减
+    const envelope = attack * decay;
+    
+    // 1. 基频（A4: 440Hz）- 温暖主音
+    const phase1 = 2 * Math.PI * fundamental * t;
+    data[i] += Math.sin(phase1) * envelope * 0.35;
+    
+    // 2. 低频泛音（A3: 220Hz）- 增加厚度
+    const phaseLow = 2 * Math.PI * (fundamental * 0.5) * t;
+    data[i] += Math.sin(phaseLow) * envelope * 0.25;
+    
+    // 3. 二次泛音（A5: 880Hz）- 轻微明亮感
+    const phase2 = 2 * Math.PI * (fundamental * 2) * t;
+    data[i] += Math.sin(phase2) * envelope * 0.15;
+    
+    // 4. 温和的中频噪声（不刺耳）
+    const noiseIndex = (i * 2) % noiseData.length;
+    // 中频滤波：保留中频温暖感
+    const filteredNoise = noiseData[noiseIndex] * (0.2 + 0.8 * (1 - Math.exp(-t * 80)));
+    data[i] += filteredNoise * envelope * 0.2;
   }
 }
 
 /**
- * 生成 DA (哒) - 中音，有冲击感
+ * 生成 DA (哒) - 浑厚有力的中低音
+ * 增强版：更多低频成分，更浑厚的音色
+ * 基于 E1 音（41.2Hz），DONG的五度音
  */
 function generateDaSound(
   data: Float32Array,
@@ -302,36 +337,65 @@ function generateDaSound(
   bufferLength: number,
   noiseData: Float32Array
 ): void {
-  const snareDuration = 0.08;
-  const snareSamples = Math.min(Math.ceil(sampleRate * snareDuration), bufferLength);
+  const duration = 0.10; // 延长到100ms，增加厚度
+  const samples = Math.min(Math.ceil(sampleRate * duration), bufferLength);
   
-  // 中频音调（主体）
-  for (let i = 0; i < snareSamples; i++) {
+  // 音乐音调：E1（41.2Hz），与A0形成纯五度关系（完美和声）
+  const fundamental = 41.2;
+  
+  for (let i = 0; i < samples; i++) {
     const t = i / sampleRate;
-    const freq = 300 * (1 - t * 0.2);
-    const phase = 2 * Math.PI * freq * t;
-    const gain = 1.0 * Math.exp(-t * 18);
-    // 使用稍微失真的波形，更有冲击感
-    const wave = Math.sin(phase) + 0.3 * Math.sin(phase * 2);
-    data[i] += wave * gain;
-  }
-  
-  // 噪声冲击（让"哒"更清晰有力）
-  const noiseDuration = 0.05;
-  const noiseSamples = Math.min(Math.ceil(sampleRate * noiseDuration), bufferLength);
-  
-  for (let i = 0; i < noiseSamples; i++) {
-    const t = i / sampleRate;
-    const gain = 0.6 * Math.exp(-t * 25);
-    const noiseIndex = i % noiseData.length;
-    // 中高频噪声
-    const filteredNoise = noiseData[noiseIndex] * (0.3 + 0.7 * (1 - Math.exp(-t * 80)));
-    data[i] += filteredNoise * gain;
+    const progress = i / samples;
+    
+    // ADSR 包络：快速attack，较长decay，平滑release
+    const attack = Math.min(t / 0.0015, 1.0); // 1.5ms attack
+    const decay = Math.exp(-t * 15); // 更慢的衰减，增加浑厚感
+    const release = progress > 0.9 ? (1 - (progress - 0.9) / 0.1) : 1.0;
+    const envelope = attack * decay * release;
+    
+    // 1. Sub Bass（E0: 20.6Hz）- 极低频共鸣
+    const phaseSub = 2 * Math.PI * (fundamental * 0.5) * t;
+    data[i] += Math.sin(phaseSub) * envelope * 0.6;
+    
+    // 2. 基频（E1: 41.2Hz）- 低频基础
+    const phase1 = 2 * Math.PI * fundamental * t;
+    data[i] += Math.sin(phase1) * envelope * 1.5;
+    
+    // 3. 二次泛音（E2: 82.4Hz）- 主要音色
+    const phase2 = 2 * Math.PI * (fundamental * 2) * t;
+    data[i] += Math.sin(phase2) * envelope * 1.2;
+    
+    // 4. 三次泛音（B2: 123.6Hz）- 和声
+    const phase3 = 2 * Math.PI * (fundamental * 3) * t;
+    data[i] += Math.sin(phase3) * envelope * 0.7;
+    
+    // 5. 四次泛音（E3: 164.8Hz）- 增加厚度
+    const phase4 = 2 * Math.PI * (fundamental * 4) * t;
+    data[i] += Math.sin(phase4) * envelope * 0.4;
+    
+    // 6. 低频punch（100Hz）- 降低punch频率，更浑厚
+    const phasePunch = 2 * Math.PI * 100 * t;
+    data[i] += Math.sin(phasePunch) * envelope * 0.3 * Math.exp(-t * 35);
+    
+    // 7. 轻微的低频噪声（增加质感）
+    if (i < samples * 0.5) { // 前50%添加噪声
+      const noiseIndex = i % noiseData.length;
+      const filteredNoise = noiseData[noiseIndex] * (0.1 + 0.9 * (1 - Math.exp(-t * 60)));
+      data[i] += filteredNoise * envelope * 0.15;
+    }
   }
 }
 
 /**
  * 生成单个鼓点步骤的 AudioBuffer（预生成版本）
+ * 
+ * 浑厚低音设计方案：
+ * - DONG: A0 (27.5Hz) - 极低频，极致浑厚，多层低频泛音
+ * - CI: A4 (440Hz) - 温暖中高音，与A0形成八度和声关系
+ * - DA: E1 (41.2Hz) - 浑厚低中频，与A0形成纯五度和声
+ * 
+ * 整体以 A 音为中心，形成八度和五度的和声关系
+ * 所有音都强调低频成分，营造浑厚温暖的整体音色
  * 
  * @param ctx - AudioContext
  * @param step - 步骤编号 (0=DONG, 1=CI, 2=DA, 3=CI)
@@ -353,12 +417,12 @@ function generateDrumStepBuffer(
   
   // 根据步骤生成不同的声音
   switch (step) {
-    case 0: // DONG
+    case 0: // DONG - 低音根音
       generateDongSound(data, sampleRate, bufferLength);
       break;
       
-    case 1: // CI
-    case 3: // CI
+    case 1: // CI - 高音明快
+    case 3: // CI - 高音明快（稍轻）
       {
         const noiseBuf = getNoiseBuffer(ctx);
         const noiseData = noiseBuf.getChannelData(0);
@@ -366,7 +430,7 @@ function generateDrumStepBuffer(
       }
       break;
       
-    case 2: // DA
+    case 2: // DA - 中音有力
       {
         const noiseBuf = getNoiseBuffer(ctx);
         const noiseData = noiseBuf.getChannelData(0);
@@ -375,12 +439,36 @@ function generateDrumStepBuffer(
       break;
   }
   
-  // 归一化防止削波
-  normalizeAudioData(data);
-  
-  // 应用音量
+  // 先应用音量
   const volume = DRUM_STEP_VOLUMES[step];
   applyVolume(data, volume);
+  
+  // 归一化防止削波（在音量调整后）
+  normalizeAudioData(data);
+  
+  // 轻微的压缩效果（让声音更紧凑，但不过度）
+  // 只对 DONG 和 DA 应用轻微压缩，CI 保持清脆
+  if (step === 0 || step === 2) {
+    for (let i = 0; i < data.length; i++) {
+      const sample = data[i];
+      // 更柔和的压缩，避免失真
+      data[i] = Math.tanh(sample * 1.1) * 0.98;
+    }
+  }
+  
+  // 最后添加淡入淡出，确保开始和结束都平滑
+  // 前 0.5ms 淡入
+  const fadeInSamples = Math.min(Math.ceil(ctx.sampleRate * 0.0005), data.length);
+  for (let i = 0; i < fadeInSamples; i++) {
+    data[i] *= i / fadeInSamples;
+  }
+  
+  // 后 1ms 淡出
+  const fadeOutSamples = Math.min(Math.ceil(ctx.sampleRate * 0.001), data.length);
+  for (let i = 0; i < fadeOutSamples; i++) {
+    const idx = data.length - 1 - i;
+    data[idx] *= i / fadeOutSamples;
+  }
   
   return buffer;
 }

@@ -454,13 +454,16 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
           beatIntervalRef.current = setInterval(() => {
              setBeatStep(v => {
                  const next = (v + 1) % 4;
-                 // 优化：使用 requestIdleCallback 或 setTimeout(0) 来避免阻塞
-                 if (audioContextRef.current && audioContextRef.current.state === 'running') {
-                     // 性能监控：记录音频播放时间
-                     const audioStartTime = performance.now();
-                     
-                     // 使用缓存的音频缓冲区播放（零延迟，高性能）
+                 
+                 // 先更新状态，确保UI和声音同步
+                 // 使用 requestAnimationFrame 确保在下一帧渲染前更新
+                 requestAnimationFrame(() => {
+                     // 播放音频（与UI同步）
                      if (audioContextRef.current && audioContextRef.current.state === 'running') {
+                         // 性能监控：记录音频播放时间
+                         const audioStartTime = performance.now();
+                         
+                         // 使用缓存的音频缓冲区播放（零延迟，高性能）
                          playDrumStepCached(audioContextRef.current, next);
                          
                          // 性能监控：记录音频播放耗时
@@ -493,10 +496,11 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
                              }, 200);
                          }
                      }
-                 }
+                 });
+                 
                  return next;
              });
-          }, 125); 
+          }, 250); // 改为250ms，使1秒完成一个完整的 dong-ci-da-ci 循环（250ms * 4 = 1000ms） 
       }
       return () => { if (beatIntervalRef.current) clearInterval(beatIntervalRef.current); };
   }, [state, showPerformance]);
@@ -600,7 +604,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
     <div className="fixed inset-0 flex flex-col bg-black overflow-hidden select-none">
       <div className="absolute inset-0 z-0 bg-slate-900 overflow-hidden">
          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.15) 1px, transparent 0)', backgroundSize: '30px 30px' }}></div>
-         <div className={`absolute inset-0 transition-opacity duration-75 ${beatStep === 0 ? 'bg-teal-500/20' : beatStep === 2 ? 'bg-blue-500/20' : 'bg-transparent'}`}></div>
+         <div className={`absolute inset-0 transition-opacity duration-150 ${beatStep === 0 ? 'bg-teal-500/20' : beatStep === 2 ? 'bg-blue-500/20' : 'bg-transparent'}`}></div>
       </div>
       
       <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
@@ -614,7 +618,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
       </div>
 
       <div className="absolute top-12 left-0 right-0 z-30 flex justify-center px-6 pointer-events-none">
-          <h1 className={`text-3xl md:text-5xl font-black text-white uppercase italic tracking-tighter text-center transition-transform duration-75 ${beatStep === 0 ? 'scale-110' : 'scale-100'}`} style={{ textShadow: "0 2px 8px rgba(0,0,0,1)" }}>
+          <h1 className={`text-3xl md:text-5xl font-black text-white uppercase italic tracking-tighter text-center transition-transform duration-150 ${beatStep === 0 ? 'scale-110' : 'scale-100'}`} style={{ textShadow: "0 2px 8px rgba(0,0,0,1)" }}>
               {currentExercise.name}
           </h1>
       </div>
@@ -766,9 +770,19 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 z-30 px-6 pb-10 flex flex-col gap-2 bg-gradient-to-t from-black via-black/80 to-transparent pt-16">
-         <div className="flex justify-center items-end gap-1.5 mb-2">
+         <div className="flex justify-center items-end gap-2 mb-2">
             {['DONG', 'CI', 'DA', 'CI'].map((label, idx) => (
-                <div key={idx} className={`h-6 flex items-center justify-center rounded-lg transition-all duration-75 ${beatStep === idx ? 'bg-white text-black px-3 font-black text-[10px]' : 'bg-white/5 text-white/20 px-2 text-[8px]'}`}>
+                <div 
+                    key={idx} 
+                    className={`h-8 flex items-center justify-center rounded-xl transition-all duration-150 ${
+                        beatStep === idx 
+                            ? 'bg-gradient-to-br from-teal-400 to-blue-500 text-white px-4 font-black text-sm shadow-lg shadow-teal-500/50 scale-110' 
+                            : 'bg-white/5 text-white/30 px-3 text-xs'
+                    }`}
+                    style={{
+                        transform: beatStep === idx ? 'translateY(-4px) scale(1.1)' : 'translateY(0) scale(1)',
+                    }}
+                >
                     {label}
                 </div>
             ))}
