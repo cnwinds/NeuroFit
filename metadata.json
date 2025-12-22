@@ -1,0 +1,7 @@
+{
+  "name": "NeuroFit 脉动",
+  "description": "一款 AI 驱动的交互式训练教练，可生成科学的健身计划，并根据您的身体状态提供实时中文语音指导。",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
