@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { WorkoutPlan, PlayerState } from '../types';
 import { generateStickFigureAnimation } from '../services/geminiService';
 import { decodeAudioData, playTone, playSuccessSound, playCountdownBeep, playDrumStep } from '../services/audioUtils';
-import { Play, Pause, SkipForward, CheckCircle, Star, Loader2, Camera, X } from 'lucide-react';
+import { Play, Pause, SkipForward, CheckCircle, Star, Loader2, Camera, X, Activity, ChevronDown, ChevronUp } from 'lucide-react';
 import { PoseLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
 interface Props {
@@ -47,6 +47,32 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
   const lastDetectionTime = useRef<number>(0);
   const detectionInterval = 150; // 每150ms检测一次（约6-7fps）
   const frameSkip = 2; // 每2帧检测一次
+  
+  // 性能监控
+  const [showPerformance, setShowPerformance] = useState(false);
+  const [performanceStats, setPerformanceStats] = useState({
+    detectionTime: 0,
+    maxDetectionTime: 0,
+    drawTime: 0,
+    maxDrawTime: 0,
+    audioTime: 0,
+    maxAudioTime: 0,
+    fps: 0
+  });
+  const performanceData = useRef<{
+    detectionTime: number[];
+    drawTime: number[];
+    audioTime: number[];
+    fps: number[];
+  }>({
+    detectionTime: [],
+    drawTime: [],
+    audioTime: [],
+    fps: []
+  });
+  const lastFrameTime = useRef<number>(performance.now());
+  const frameCount = useRef<number>(0);
+  const updateStatsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -99,6 +125,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
     return () => {
         if(requestRef.current) cancelAnimationFrame(requestRef.current);
         if(streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+        if(updateStatsTimeoutRef.current) clearTimeout(updateStatsTimeoutRef.current);
     };
   }, []);
 
@@ -168,10 +195,19 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
           lastDetectionTime.current = now;
           lastVideoTimeRef.current = video.currentTime;
           
+          // 性能监控：记录检测开始时间
+          const detectionStartTime = performance.now();
+          
           // 使用 requestIdleCallback 如果可用，否则使用 setTimeout 来避免阻塞音频线程
           const detectionCallback = (result: any) => {
+              // 性能监控：记录检测耗时（从调用detectForVideo到回调执行）
+              const detectionEndTime = performance.now();
+              const detectionDuration = detectionEndTime - detectionStartTime;
+              
               // 使用 requestAnimationFrame 来确保绘制不阻塞音频
               requestAnimationFrame(() => {
+                  const drawStartTime = performance.now();
+                  
                   ctx.clearRect(0, 0, canvas.width, canvas.height);
                   if (result.landmarks && result.landmarks.length > 0) {
                       const landmarks = result.landmarks[0];
@@ -189,6 +225,39 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
                           triggerScore(); 
                       }
                   }
+                  
+                  // 性能监控：记录绘制耗时
+                  const drawEndTime = performance.now();
+                  const drawDuration = drawEndTime - drawStartTime;
+                  
+                  // 更新性能数据（保留最近30次记录）
+                  if (performanceData.current.detectionTime.length >= 30) {
+                      performanceData.current.detectionTime.shift();
+                      performanceData.current.drawTime.shift();
+                  }
+                  performanceData.current.detectionTime.push(detectionDuration);
+                  performanceData.current.drawTime.push(drawDuration);
+                  
+                  // 更新性能统计（节流更新，每200ms更新一次UI）
+                  if (showPerformance && !updateStatsTimeoutRef.current) {
+                      updateStatsTimeoutRef.current = setTimeout(() => {
+                          const detection = performanceData.current.detectionTime;
+                          const draw = performanceData.current.drawTime;
+                          const audio = performanceData.current.audioTime;
+                          const fps = performanceData.current.fps;
+                          
+                          setPerformanceStats({
+                              detectionTime: detection.length > 0 ? detection.reduce((a, b) => a + b, 0) / detection.length : 0,
+                              maxDetectionTime: detection.length > 0 ? Math.max(...detection) : 0,
+                              drawTime: draw.length > 0 ? draw.reduce((a, b) => a + b, 0) / draw.length : 0,
+                              maxDrawTime: draw.length > 0 ? Math.max(...draw) : 0,
+                              audioTime: audio.length > 0 ? audio.reduce((a, b) => a + b, 0) / audio.length : 0,
+                              maxAudioTime: audio.length > 0 ? Math.max(...audio) : 0,
+                              fps: fps.length > 0 ? fps.reduce((a, b) => a + b, 0) / fps.length : 0
+                          });
+                          updateStatsTimeoutRef.current = null;
+                      }, 200);
+                  }
               });
           };
           
@@ -197,6 +266,41 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
           // 即使不检测，也继续动画循环以保持流畅
           if (lastVideoTimeRef.current !== video.currentTime) {
               lastVideoTimeRef.current = video.currentTime;
+          }
+      }
+      
+      // 性能监控：计算FPS
+      frameCount.current++;
+      const currentFrameTime = performance.now();
+      const timeSinceLastFrame = currentFrameTime - lastFrameTime.current;
+      if (timeSinceLastFrame >= 1000) { // 每秒更新一次FPS
+          const fps = Math.round((frameCount.current * 1000) / timeSinceLastFrame);
+          if (performanceData.current.fps.length >= 30) {
+              performanceData.current.fps.shift();
+          }
+          performanceData.current.fps.push(fps);
+          frameCount.current = 0;
+          lastFrameTime.current = currentFrameTime;
+          
+          // 更新性能统计（节流更新）
+          if (showPerformance && !updateStatsTimeoutRef.current) {
+              updateStatsTimeoutRef.current = setTimeout(() => {
+                  const detection = performanceData.current.detectionTime;
+                  const draw = performanceData.current.drawTime;
+                  const audio = performanceData.current.audioTime;
+                  const fps = performanceData.current.fps;
+                  
+                  setPerformanceStats({
+                      detectionTime: detection.length > 0 ? detection.reduce((a, b) => a + b, 0) / detection.length : 0,
+                      maxDetectionTime: detection.length > 0 ? Math.max(...detection) : 0,
+                      drawTime: draw.length > 0 ? draw.reduce((a, b) => a + b, 0) / draw.length : 0,
+                      maxDrawTime: draw.length > 0 ? Math.max(...draw) : 0,
+                      audioTime: audio.length > 0 ? audio.reduce((a, b) => a + b, 0) / audio.length : 0,
+                      maxAudioTime: audio.length > 0 ? Math.max(...audio) : 0,
+                      fps: fps.length > 0 ? fps.reduce((a, b) => a + b, 0) / fps.length : 0
+                  });
+                  updateStatsTimeoutRef.current = null;
+              }, 200);
           }
       }
       
@@ -346,10 +450,43 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
                  const next = (v + 1) % 4;
                  // 优化：使用 requestIdleCallback 或 setTimeout(0) 来避免阻塞
                  if (audioContextRef.current && audioContextRef.current.state === 'running') {
+                     // 性能监控：记录音频播放时间
+                     const audioStartTime = performance.now();
+                     
                      // 使用微任务来确保音频播放不阻塞主线程
                      Promise.resolve().then(() => {
                          if (audioContextRef.current && audioContextRef.current.state === 'running') {
                              playDrumStep(audioContextRef.current, next);
+                             
+                             // 性能监控：记录音频播放耗时
+                             const audioEndTime = performance.now();
+                             const audioDuration = audioEndTime - audioStartTime;
+                             
+                             if (performanceData.current.audioTime.length >= 30) {
+                                 performanceData.current.audioTime.shift();
+                             }
+                             performanceData.current.audioTime.push(audioDuration);
+                             
+                             // 更新性能统计（节流更新）
+                             if (showPerformance && !updateStatsTimeoutRef.current) {
+                                 updateStatsTimeoutRef.current = setTimeout(() => {
+                                     const detection = performanceData.current.detectionTime;
+                                     const draw = performanceData.current.drawTime;
+                                     const audio = performanceData.current.audioTime;
+                                     const fps = performanceData.current.fps;
+                                     
+                                     setPerformanceStats({
+                                         detectionTime: detection.length > 0 ? detection.reduce((a, b) => a + b, 0) / detection.length : 0,
+                                         maxDetectionTime: detection.length > 0 ? Math.max(...detection) : 0,
+                                         drawTime: draw.length > 0 ? draw.reduce((a, b) => a + b, 0) / draw.length : 0,
+                                         maxDrawTime: draw.length > 0 ? Math.max(...draw) : 0,
+                                         audioTime: audio.length > 0 ? audio.reduce((a, b) => a + b, 0) / audio.length : 0,
+                                         maxAudioTime: audio.length > 0 ? Math.max(...audio) : 0,
+                                         fps: fps.length > 0 ? fps.reduce((a, b) => a + b, 0) / fps.length : 0
+                                     });
+                                     updateStatsTimeoutRef.current = null;
+                                 }, 200);
+                             }
                          }
                      });
                  }
@@ -358,7 +495,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
           }, 125); 
       }
       return () => { if (beatIntervalRef.current) clearInterval(beatIntervalRef.current); };
-  }, [state]);
+  }, [state, showPerformance]);
 
   const togglePause = () => {
     if (state === PlayerState.PLAYING) setState(PlayerState.PAUSED);
@@ -367,6 +504,28 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
   };
 
   const progress = ((currentExercise.durationSeconds - timeLeft) / currentExercise.durationSeconds) * 100;
+
+  // 使用状态中的性能数据
+  const avgDetectionTime = performanceStats.detectionTime;
+  const maxDetectionTime = performanceStats.maxDetectionTime;
+  const avgDrawTime = performanceStats.drawTime;
+  const maxDrawTime = performanceStats.maxDrawTime;
+  const avgAudioTime = performanceStats.audioTime;
+  const maxAudioTime = performanceStats.maxAudioTime;
+  const avgFps = performanceStats.fps;
+  
+  // 根据性能数据判断是否有问题
+  const getPerformanceColor = (value: number, threshold: number): string => {
+    if (value > threshold * 1.5) return 'text-red-400';
+    if (value > threshold) return 'text-yellow-400';
+    return 'text-green-400';
+  };
+
+  const getPerformanceBg = (value: number, threshold: number): string => {
+    if (value > threshold * 1.5) return 'bg-red-500/20';
+    if (value > threshold) return 'bg-yellow-500/20';
+    return 'bg-green-500/20';
+  };
 
   if (state === PlayerState.COMPLETED) {
     return (
@@ -466,6 +625,122 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
       <button onClick={onExit} className="absolute top-4 left-4 z-40 text-white/60 active:text-white p-2 bg-black/20 rounded-full">
           <X className="w-5 h-5" />
       </button>
+
+      {/* 性能监控面板 */}
+      <div className="absolute top-4 left-16 z-40">
+        <button 
+          onClick={() => setShowPerformance(!showPerformance)}
+          className="text-white/60 active:text-white p-2 bg-black/40 backdrop-blur-md rounded-full border border-white/10 hover:bg-black/60 transition-all"
+          title="性能监控"
+        >
+          <Activity className="w-5 h-5" />
+        </button>
+      </div>
+
+      {showPerformance && state === PlayerState.PLAYING && (
+        <div className="absolute top-16 left-4 z-40 bg-black/80 backdrop-blur-md rounded-2xl border border-white/20 p-4 min-w-[280px] shadow-2xl">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              性能监控
+            </h3>
+            <button 
+              onClick={() => setShowPerformance(false)}
+              className="text-white/40 hover:text-white transition-colors"
+            >
+              <ChevronUp className="w-4 h-4" />
+            </button>
+          </div>
+          
+          <div className="space-y-3 text-xs">
+            {/* FPS */}
+            <div className="bg-white/5 rounded-lg p-2.5 border border-white/10">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-white/60">帧率 (FPS)</span>
+                <span className={`font-bold ${getPerformanceColor(60 - avgFps, 10)}`}>
+                  {avgFps > 0 ? Math.round(avgFps) : '--'} fps
+                </span>
+              </div>
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all ${getPerformanceBg(60 - avgFps, 10)}`}
+                  style={{ width: `${Math.min(100, (avgFps / 60) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 姿态检测时间 */}
+            <div className="bg-white/5 rounded-lg p-2.5 border border-white/10">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-white/60">姿态检测</span>
+                <span className={`font-bold ${getPerformanceColor(avgDetectionTime, 50)}`}>
+                  {avgDetectionTime > 0 ? avgDetectionTime.toFixed(1) : '--'}ms
+                </span>
+              </div>
+              <div className="flex justify-between text-[10px] text-white/40 mb-1">
+                <span>平均</span>
+                <span>峰值: {maxDetectionTime > 0 ? maxDetectionTime.toFixed(1) : '--'}ms</span>
+              </div>
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all ${getPerformanceBg(avgDetectionTime, 50)}`}
+                  style={{ width: `${Math.min(100, (avgDetectionTime / 150) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 绘制时间 */}
+            <div className="bg-white/5 rounded-lg p-2.5 border border-white/10">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-white/60">Canvas绘制</span>
+                <span className={`font-bold ${getPerformanceColor(avgDrawTime, 10)}`}>
+                  {avgDrawTime > 0 ? avgDrawTime.toFixed(1) : '--'}ms
+                </span>
+              </div>
+              <div className="flex justify-between text-[10px] text-white/40 mb-1">
+                <span>平均</span>
+                <span>峰值: {maxDrawTime > 0 ? maxDrawTime.toFixed(1) : '--'}ms</span>
+              </div>
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all ${getPerformanceBg(avgDrawTime, 10)}`}
+                  style={{ width: `${Math.min(100, (avgDrawTime / 30) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 音频处理时间 */}
+            <div className="bg-white/5 rounded-lg p-2.5 border border-white/10">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-white/60">音频处理</span>
+                <span className={`font-bold ${getPerformanceColor(avgAudioTime, 5)}`}>
+                  {avgAudioTime > 0 ? avgAudioTime.toFixed(2) : '--'}ms
+                </span>
+              </div>
+              <div className="flex justify-between text-[10px] text-white/40 mb-1">
+                <span>平均</span>
+                <span>峰值: {maxAudioTime > 0 ? maxAudioTime.toFixed(2) : '--'}ms</span>
+              </div>
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all ${getPerformanceBg(avgAudioTime, 5)}`}
+                  style={{ width: `${Math.min(100, (avgAudioTime / 15) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 总耗时 */}
+            <div className="bg-white/5 rounded-lg p-2.5 border border-white/10 pt-3 border-t border-white/10">
+              <div className="flex justify-between items-center">
+                <span className="text-white/60">总耗时/帧</span>
+                <span className={`font-bold ${getPerformanceColor(avgDetectionTime + avgDrawTime, 60)}`}>
+                  {(avgDetectionTime + avgDrawTime).toFixed(1)}ms
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="absolute inset-0 z-20" onClick={togglePause}>
          {state === PlayerState.PAUSED && (
