@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { WorkoutPlan, PlayerState } from '../types';
 import { generateStickFigureAnimation } from '../services/geminiService';
-import { decodeAudioData, playTone, playSuccessSound, playCountdownBeep, playDrumStep } from '../services/audioUtils';
+import { decodeAudioData, playTone, playSuccessSound, playCountdownBeep, playDrumStep, playDrumStepCached, pregenerateDrumBuffers } from '../services/audioUtils';
 import { Play, Pause, SkipForward, CheckCircle, Star, Loader2, Camera, X, Activity, ChevronDown, ChevronUp } from 'lucide-react';
 import { PoseLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
@@ -88,6 +88,12 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
       sampleRate: 24000,
       latencyHint: 'interactive' // 优化音频延迟
     });
+    
+    // 预生成所有鼓点音频缓冲区（避免实时生成导致的延迟）
+    if (audioContextRef.current) {
+      pregenerateDrumBuffers(audioContextRef.current).catch(console.error);
+    }
+    
     return () => { audioContextRef.current?.close(); };
   }, []);
 
@@ -453,42 +459,40 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
                      // 性能监控：记录音频播放时间
                      const audioStartTime = performance.now();
                      
-                     // 使用微任务来确保音频播放不阻塞主线程
-                     Promise.resolve().then(() => {
-                         if (audioContextRef.current && audioContextRef.current.state === 'running') {
-                             playDrumStep(audioContextRef.current, next);
-                             
-                             // 性能监控：记录音频播放耗时
-                             const audioEndTime = performance.now();
-                             const audioDuration = audioEndTime - audioStartTime;
-                             
-                             if (performanceData.current.audioTime.length >= 30) {
-                                 performanceData.current.audioTime.shift();
-                             }
-                             performanceData.current.audioTime.push(audioDuration);
-                             
-                             // 更新性能统计（节流更新）
-                             if (showPerformance && !updateStatsTimeoutRef.current) {
-                                 updateStatsTimeoutRef.current = setTimeout(() => {
-                                     const detection = performanceData.current.detectionTime;
-                                     const draw = performanceData.current.drawTime;
-                                     const audio = performanceData.current.audioTime;
-                                     const fps = performanceData.current.fps;
-                                     
-                                     setPerformanceStats({
-                                         detectionTime: detection.length > 0 ? detection.reduce((a, b) => a + b, 0) / detection.length : 0,
-                                         maxDetectionTime: detection.length > 0 ? Math.max(...detection) : 0,
-                                         drawTime: draw.length > 0 ? draw.reduce((a, b) => a + b, 0) / draw.length : 0,
-                                         maxDrawTime: draw.length > 0 ? Math.max(...draw) : 0,
-                                         audioTime: audio.length > 0 ? audio.reduce((a, b) => a + b, 0) / audio.length : 0,
-                                         maxAudioTime: audio.length > 0 ? Math.max(...audio) : 0,
-                                         fps: fps.length > 0 ? fps.reduce((a, b) => a + b, 0) / fps.length : 0
-                                     });
-                                     updateStatsTimeoutRef.current = null;
-                                 }, 200);
-                             }
+                     // 使用缓存的音频缓冲区播放（零延迟，高性能）
+                     if (audioContextRef.current && audioContextRef.current.state === 'running') {
+                         playDrumStepCached(audioContextRef.current, next);
+                         
+                         // 性能监控：记录音频播放耗时
+                         const audioEndTime = performance.now();
+                         const audioDuration = audioEndTime - audioStartTime;
+                         
+                         if (performanceData.current.audioTime.length >= 30) {
+                             performanceData.current.audioTime.shift();
                          }
-                     });
+                         performanceData.current.audioTime.push(audioDuration);
+                         
+                         // 更新性能统计（节流更新）
+                         if (showPerformance && !updateStatsTimeoutRef.current) {
+                             updateStatsTimeoutRef.current = setTimeout(() => {
+                                 const detection = performanceData.current.detectionTime;
+                                 const draw = performanceData.current.drawTime;
+                                 const audio = performanceData.current.audioTime;
+                                 const fps = performanceData.current.fps;
+                                 
+                                 setPerformanceStats({
+                                     detectionTime: detection.length > 0 ? detection.reduce((a: number, b: number) => a + b, 0) / detection.length : 0,
+                                     maxDetectionTime: detection.length > 0 ? Math.max(...detection) : 0,
+                                     drawTime: draw.length > 0 ? draw.reduce((a: number, b: number) => a + b, 0) / draw.length : 0,
+                                     maxDrawTime: draw.length > 0 ? Math.max(...draw) : 0,
+                                     audioTime: audio.length > 0 ? audio.reduce((a: number, b: number) => a + b, 0) / audio.length : 0,
+                                     maxAudioTime: audio.length > 0 ? Math.max(...audio) : 0,
+                                     fps: fps.length > 0 ? fps.reduce((a: number, b: number) => a + b, 0) / fps.length : 0
+                                 });
+                                 updateStatsTimeoutRef.current = null;
+                             }, 200);
+                         }
+                     }
                  }
                  return next;
              });
