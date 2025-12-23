@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+// 初始化动作系统
+import './actions';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

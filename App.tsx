@@ -2,10 +2,14 @@
 import React, { useState } from 'react';
 import WorkoutGenerator from './components/WorkoutGenerator';
 import Player from './components/Player';
+import BeatEditor from './components/BeatEditor';
 import { WorkoutPlan } from './types';
+
+type Page = 'home' | 'beat-editor' | 'player';
 
 const App: React.FC = () => {
   const [currentPlan, setCurrentPlan] = useState<WorkoutPlan | null>(null);
+  const [currentPage, setCurrentPage] = useState<Page>('home');
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white selection:bg-teal-500 selection:text-white overflow-x-hidden relative">
@@ -17,15 +21,30 @@ const App: React.FC = () => {
       </div>
 
       <div className="container mx-auto px-4 min-h-screen flex flex-col">
-        {!currentPlan ? (
+        {currentPage === 'home' && (
           <div className="flex-1 flex flex-col items-center justify-center py-10">
-            <WorkoutGenerator onPlanGenerated={setCurrentPlan} />
+            <WorkoutGenerator 
+              onPlanGenerated={(plan) => {
+                setCurrentPlan(plan);
+                setCurrentPage('player');
+              }}
+              onOpenBeatEditor={() => setCurrentPage('beat-editor')}
+            />
           </div>
-        ) : (
+        )}
+        
+        {currentPage === 'beat-editor' && (
+          <BeatEditor onClose={() => setCurrentPage('home')} />
+        )}
+        
+        {currentPage === 'player' && currentPlan && (
           <div className="fixed inset-0 z-[100]">
             <Player 
               plan={currentPlan} 
-              onExit={() => setCurrentPlan(null)} 
+              onExit={() => {
+                setCurrentPlan(null);
+                setCurrentPage('home');
+              }} 
             />
           </div>
         )}

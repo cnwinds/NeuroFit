@@ -2,9 +2,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { WorkoutPlan, PlayerState } from '../types';
 import { generateStickFigureAnimation } from '../services/geminiService';
-import { decodeAudioData, playTone, playSuccessSound, playCountdownBeep, playDrumStep, playDrumStepCached, pregenerateDrumBuffers } from '../services/audioUtils';
+import { decodeAudioData, playTone, playSuccessSound, playCountdownBeep, playDrumStepCached, pregenerateDrumBuffers } from '../services/audioUtils';
+import { convertLegacyPattern, type DrumStep } from '../beats';
 import { Play, Pause, SkipForward, CheckCircle, Star, Loader2, Camera, X, Activity, ChevronDown, ChevronUp } from 'lucide-react';
 import { PoseLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { getAction, ActionComponent } from '../actions';
+import { ActionScore } from '../actions/base/types';
+import { calculateScore } from '../services/scoreCalculator';
+import { CompletionEffect } from './CompletionEffect';
 
 interface Props {
   plan: WorkoutPlan;
@@ -30,6 +35,8 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
   const [beatStep, setBeatStep] = useState(0);
   const [xp, setXp] = useState(0);
   const [floatingScores, setFloatingScores] = useState<ScoreParticle[]>([]);
+  const [currentScore, setCurrentScore] = useState<ActionScore | null>(null);
+  const [actionAccuracy, setActionAccuracy] = useState<number>(0);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -39,8 +46,10 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
   const lastVideoTimeRef = useRef<number>(-1);
   const [cameraReady, setCameraReady] = useState(false);
 
-  const isJumping = useRef<boolean>(false);
-  const baselineY = useRef<number>(0);
+  // 动作系统相关
+  const currentActionRef = useRef<ActionComponent | null>(null);
+  const previousLandmarksRef = useRef<any[]>([]);
+  const lastBeatTimeRef = useRef<number>(0);
   
   // 性能优化：帧跳跃和时间节流
   const frameSkipCounter = useRef<number>(0);
@@ -80,6 +89,40 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
   const animationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const currentExercise = plan.exercises[currentExerciseIndex];
+
+  // 获取当前动作组件
+  useEffect(() => {
+    // 尝试从动作名称中提取英文名称
+    // 例如: "跳跃 (Jump)" -> "JUMP", "开合跳 (Jumping Jacks)" -> "JUMP"
+    const exerciseName = currentExercise.name;
+    let actionName = '';
+    
+    // 尝试匹配括号中的英文名称
+    const match = exerciseName.match(/\(([^)]+)\)/);
+    if (match) {
+      actionName = match[1].toUpperCase().split(' ')[0]; // 取第一个单词
+    } else {
+      // 如果没有括号，尝试直接匹配常见动作名称
+      if (exerciseName.includes('跳') || exerciseName.includes('Jump')) {
+        actionName = 'JUMP';
+      } else if (exerciseName.includes('拍') || exerciseName.includes('Clap')) {
+        actionName = 'CLAP';
+      } else {
+        // 默认尝试使用整个名称
+        actionName = exerciseName.toUpperCase().split(' ')[0];
+      }
+    }
+    
+    const action = getAction(actionName);
+    if (action) {
+      currentActionRef.current = action;
+      // 重置检测器
+      action.Detector.reset();
+      previousLandmarksRef.current = [];
+    } else {
+      currentActionRef.current = null;
+    }
+  }, [currentExerciseIndex, currentExercise.name]);
 
   useEffect(() => {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -142,11 +185,20 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
       setTimeLeft(currentExercise.durationSeconds);
       setFrames([]);
       setCurrentFrameIndex(0);
+      setCurrentScore(null);
+      setActionAccuracy(0);
 
-      const generatedFrames = await generateStickFigureAnimation(currentExercise.name, !!plan.isDemo);
-      if (isMounted) {
-        if (generatedFrames.length > 0) setFrames(generatedFrames);
+      // 如果有动作组件，使用动作组件的引导动画
+      if (currentActionRef.current) {
+        // 动作组件的Guide会在准备好后调用onReady
         setState(PlayerState.INSTRUCTION);
+      } else {
+        // 回退到原有的动画生成方式
+        const generatedFrames = await generateStickFigureAnimation(currentExercise.name, !!plan.isDemo);
+        if (isMounted) {
+          if (generatedFrames.length > 0) setFrames(generatedFrames);
+          setState(PlayerState.INSTRUCTION);
+        }
       }
     };
     prepareExercise();
@@ -218,17 +270,23 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
                   if (result.landmarks && result.landmarks.length > 0) {
                       const landmarks = result.landmarks[0];
                       drawStickFigure(ctx, landmarks, canvas.width, canvas.height);
-                      const hipY = (landmarks[23].y + landmarks[24].y) / 2;
-                      if (baselineY.current === 0 || hipY > baselineY.current) {
-                          baselineY.current = baselineY.current * 0.95 + hipY * 0.05;
-                      }
-                      const jumpThreshold = 0.08; 
-                      const isUp = hipY < (baselineY.current - jumpThreshold);
-                      if (isUp && !isJumping.current) {
-                          isJumping.current = true;
-                      } else if (!isUp && isJumping.current) { 
-                          isJumping.current = false; 
-                          triggerScore(); 
+                      
+                      // 使用动作组件的检测器
+                      if (currentActionRef.current && state === PlayerState.PLAYING) {
+                          const detectionResult = currentActionRef.current.Detector.detect(
+                              landmarks,
+                              previousLandmarksRef.current
+                          );
+                          
+                          // 更新准确度
+                          setActionAccuracy(detectionResult.accuracy);
+                          
+                          // 如果动作完成，触发评分
+                          if (detectionResult.isCompleted) {
+                              handleActionComplete(detectionResult.accuracy);
+                          }
+                          
+                          previousLandmarksRef.current = landmarks;
                       }
                   }
                   
@@ -378,15 +436,37 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
       ctx.restore();
   };
 
-  const triggerScore = () => {
+  const handleActionComplete = useCallback((accuracy: number) => {
+      if (!audioContextRef.current || state !== PlayerState.PLAYING) return;
+      
+      // 计算节拍偏差
+      const now = Date.now();
+      const timingOffset = lastBeatTimeRef.current > 0 ? Math.abs(now - lastBeatTimeRef.current) : 0;
+      
+      // 计算评分
+      const score = calculateScore(accuracy, timingOffset, beatStep);
+      setCurrentScore(score);
+      
+      // 显示浮动分数
       const id = Date.now();
       const x = 20 + Math.random() * 60; 
-      const y = 30 + Math.random() * 20; 
-      setFloatingScores(prev => [...prev, { id, x, y, value: "PERFECT!" }]);
+      const y = 30 + Math.random() * 20;
+      const scoreText = score === ActionScore.EXCELLENT ? 'EXCELLENT!' : 
+                       score === ActionScore.GOOD ? 'GOOD!' :
+                       score === ActionScore.BAD ? 'BAD' : 'MISS';
+      setFloatingScores(prev => [...prev, { id, x, y, value: scoreText }]);
       setTimeout(() => setFloatingScores(prev => prev.filter(p => p.id !== id)), 1000);
-      setXp(prev => prev + 1);
-      if (state === PlayerState.PLAYING && audioContextRef.current) playTone(audioContextRef.current, 880, 0.05, 'triangle');
-  };
+      
+      // 根据评分增加XP
+      const xpGain = score === ActionScore.EXCELLENT ? 10 : 
+                     score === ActionScore.GOOD ? 5 :
+                     score === ActionScore.BAD ? 2 : 1;
+      setXp(prev => prev + xpGain);
+      
+      // 暂停播放，显示完成效果
+      if (beatIntervalRef.current) clearInterval(beatIntervalRef.current);
+      setState(PlayerState.CELEBRATION);
+  }, [state, beatStep]);
 
   const startCountdown = async () => {
       if (audioContextRef.current?.state === 'suspended') await audioContextRef.current.resume();
@@ -415,6 +495,16 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
             setState(PlayerState.INSTRUCTION);
           } else { setState(PlayerState.COMPLETED); }
       }, 3000);
+  }, [currentExerciseIndex, plan.exercises]);
+
+  const handleCompletionEffectComplete = useCallback(() => {
+      setCurrentScore(null);
+      if (currentExerciseIndex < plan.exercises.length - 1) {
+        setCurrentExerciseIndex(v => v + 1);
+        setState(PlayerState.INSTRUCTION);
+      } else {
+        setState(PlayerState.COMPLETED);
+      }
   }, [currentExerciseIndex, plan.exercises]);
 
   // Added skipExercise fix: This function clears existing timers and moves to the next exercise or completion state.
@@ -451,9 +541,26 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
               audioContextRef.current.resume().catch(console.error);
           }
           
+          // 使用动作组件的节拍配置，如果没有则使用默认值
+          const beatPattern = currentActionRef.current?.Beat || {
+              bpm: 120,
+              pattern: [0, 1, 2, 3],
+              audioConfig: { steps: [] }
+          };
+          
+          // 处理新旧格式：如果是 number[]，转换为 DrumStep[]
+          const patternSteps: (number | DrumStep)[] = beatPattern.pattern;
+          const patternLength = patternSteps.length;
+          
+          // 计算节拍间隔（基于BPM）
+          const beatIntervalMs = (60 / beatPattern.bpm) * 1000 / patternLength;
+          
           beatIntervalRef.current = setInterval(() => {
              setBeatStep(v => {
-                 const next = (v + 1) % 4;
+                 const next = (v + 1) % patternLength;
+                 
+                 // 记录节拍时间（用于计算节拍偏差）
+                 lastBeatTimeRef.current = Date.now();
                  
                  // 先更新状态，确保UI和声音同步
                  // 使用 requestAnimationFrame 确保在下一帧渲染前更新
@@ -464,7 +571,19 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
                          const audioStartTime = performance.now();
                          
                          // 使用缓存的音频缓冲区播放（零延迟，高性能）
-                         playDrumStepCached(audioContextRef.current, next);
+                         // playDrumStepCached 支持 number（旧格式）和 DrumStep（新格式）
+                         const step = patternSteps[next];
+                         if (typeof step === 'number') {
+                             // 旧格式：直接传递 number
+                             playDrumStepCached(audioContextRef.current, step);
+                         } else {
+                             // 新格式：需要转换为 number 或使用新的播放器
+                             // 暂时使用类型映射（向后兼容）
+                             const legacyStep = step.type === 'kick' ? 0 :
+                                               step.type === 'hihat' ? 1 :
+                                               step.type === 'snare' ? 2 : 1;
+                             playDrumStepCached(audioContextRef.current, legacyStep);
+                         }
                          
                          // 性能监控：记录音频播放耗时
                          const audioEndTime = performance.now();
@@ -500,7 +619,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
                  
                  return next;
              });
-          }, 250); // 改为250ms，使1秒完成一个完整的 dong-ci-da-ci 循环（250ms * 4 = 1000ms） 
+          }, beatIntervalMs);
       }
       return () => { if (beatIntervalRef.current) clearInterval(beatIntervalRef.current); };
   }, [state, showPerformance]);
@@ -556,7 +675,10 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
              </div>
              
              <div className="relative w-full aspect-square bg-black rounded-3xl overflow-hidden border-2 border-white/10 shadow-2xl flex items-center justify-center">
-                 {frames.length > 0 ? (
+                 {currentActionRef.current ? (() => {
+                    const GuideComponent = currentActionRef.current!.Guide;
+                    return <GuideComponent onReady={() => {}} />;
+                 })() : frames.length > 0 ? (
                     <img src={frames[currentFrameIndex]} className="w-full h-full object-contain p-4" alt="guide" />
                  ) : <Loader2 className="w-10 h-10 animate-spin text-teal-500" />}
                  
@@ -756,12 +878,15 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
                 <Play className="w-16 h-16 text-white fill-white" />
             </div>
          )}
-         {state === PlayerState.CELEBRATION && (
-              <div className="absolute inset-0 flex items-center justify-center bg-teal-500/20 backdrop-blur-sm">
-                <div className="text-6xl font-black text-white italic tracking-tighter animate-bounce">太棒了!</div>
-              </div>
-         )}
       </div>
+      
+      {state === PlayerState.CELEBRATION && currentScore && (
+          <CompletionEffect 
+            score={currentScore}
+            audioContext={audioContextRef.current}
+            onComplete={handleCompletionEffectComplete}
+          />
+      )}
 
       {/* Mobile-optimized PIP Camera */}
       <div className="absolute bottom-36 right-4 z-40 w-24 md:w-40 aspect-[4/3] rounded-2xl overflow-hidden border border-white/20 shadow-2xl bg-black">
