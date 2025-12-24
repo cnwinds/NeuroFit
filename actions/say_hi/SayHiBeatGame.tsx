@@ -17,7 +17,7 @@ interface Particle {
     color: string;
 }
 
-export const SayHiBeatGame: React.FC<DisplayProps> = ({ landmarks, accuracy, beatStep, beatProgress, bpm }) => {
+export const SayHiBeatGame: React.FC<DisplayProps> = ({ landmarks, accuracy, beatStep, beatProgress, bpm, patternLength }) => {
     const [notes, setNotes] = useState<Note[]>([]);
     const [particles, setParticles] = useState<Particle[]>([]);
     const lastBeatStepRef = useRef<number>(-1);
@@ -87,18 +87,18 @@ export const SayHiBeatGame: React.FC<DisplayProps> = ({ landmarks, accuracy, bea
         setNotes(prev => prev
             .map(note => {
                 // 计算音符从生成到现在的步数差
-                // 假设音符飞过 1 个 beatStep 的距离 (即 progress 从 0 到 1 需要 1 个 step)
+                // 假设飞行时间为一整个 pattern 的长度 (如果是4步，就飞4步)
                 let ageInSteps = beatStep - note.spawnStep;
-                if (ageInSteps < 0) ageInSteps += 4; // 假设 pattern 长度为 4
+                if (ageInSteps < 0) ageInSteps += patternLength;
 
                 return {
                     ...note,
-                    progress: ageInSteps + beatProgress
+                    progress: (ageInSteps + beatProgress) / patternLength
                 };
             })
-            .filter(note => note.progress < 1.2) // 稍微多留一点余地让击中动画显眼
+            .filter(note => note.progress < 1.1)
         );
-    }, [beatStep, beatProgress]);
+    }, [beatStep, beatProgress, patternLength]);
 
     useEffect(() => {
         requestRef.current = requestAnimationFrame(animate);

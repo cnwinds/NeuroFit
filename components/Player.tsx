@@ -377,7 +377,8 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
         const elapsed = performance.now() - startTime;
 
         // Calculate total progress in steps
-        const currentTotalSteps = elapsed / ((60 * 1000) / bpm / (patternLength / 4));
+        // 4 steps = 1 beat (standard 16th note subdivision in sequencers)
+        const currentTotalSteps = elapsed / ((60 * 1000) / bpm / 4);
         const currentStep = Math.floor(currentTotalSteps) % patternLength;
         const currentProgress = currentTotalSteps % 1; // 0-1 within the step
 
@@ -438,6 +439,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
                 beatStep={beatStep}
                 beatProgress={beatProgress}
                 bpm={currentActionRef.current.Beat.bpm}
+                patternLength={currentActionRef.current.Beat.pattern.length}
               />
             ) : frames.length > 0 ? (
               <img src={frames[currentFrameIndex]} className="w-full h-full object-contain p-8" alt="guide" />
@@ -510,6 +512,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
             beatStep={beatStep}
             beatProgress={beatProgress}
             bpm={currentActionRef.current.Beat.bpm}
+            patternLength={currentActionRef.current.Beat.pattern.length}
           />
         </div>
       )}

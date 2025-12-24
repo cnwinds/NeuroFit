@@ -16,6 +16,7 @@ export interface GuideProps {
   beatStep: number;
   beatProgress: number; // 0-1 within current step
   bpm: number;
+  patternLength: number;
 }
 
 /**
@@ -27,6 +28,7 @@ export interface DisplayProps {
   beatStep: number;
   beatProgress: number; // 0-1 within current step
   bpm: number;
+  patternLength: number;
 }
 
 /**

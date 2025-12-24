@@ -13,9 +13,11 @@ export const SayHiGuide: React.FC<GuideProps> = ({ onReady, landmarks, beatStep,
     // globalStepProgress 在 4/4 拍中范围是 0 到 4
     const globalStepProgress = beatStep + beatProgress;
 
-    // 我们让摆动周期与 2 拍同步（一拍往，一拍返）
-    // Math.sin 的周期是 2PI，所以除以 2 拍后再乘 2PI
-    const waveAngle = -50 + Math.sin((globalStepProgress / 2) * Math.PI * 2) * 30;
+    // 我们让摆动周期与 1 拍同步 (4步)
+    // 继续增加两端的停顿感，将指数调整为 0.6（在 0.8 和 0.4 之间寻找平衡点）
+    const rawSin = Math.sin((globalStepProgress / 4) * Math.PI * 2);
+    const easedSin = Math.sign(rawSin) * Math.pow(Math.abs(rawSin), 0.6);
+    const waveAngle = -50 + easedSin * 30;
     const radian = (waveAngle * Math.PI) / 180;
 
     // Static Body Parts
@@ -40,7 +42,7 @@ export const SayHiGuide: React.FC<GuideProps> = ({ onReady, landmarks, beatStep,
 
     // 大臂：从肩部出发
     // 我们让大臂相对固定，小臂挥动比较大
-    const upperArmAngle = -30 + Math.sin((globalStepProgress / 2) * Math.PI * 2) * 10;
+    const upperArmAngle = -30 + Math.sin((globalStepProgress / 4) * Math.PI * 2) * 10;
     const upperArmRad = (upperArmAngle * Math.PI) / 180;
     const elbow = {
         x: shoulder.x + upperArmLength * Math.cos(upperArmRad),
