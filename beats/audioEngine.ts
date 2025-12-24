@@ -1,22 +1,26 @@
 /**
  * Web Audio API 音频引擎
- * 提供实时合成各种鼓点音色
+ * 提供通过 AudioBuffer 缓存的高效鼓点合成与播放
  */
 
 import type { DrumType, DrumStep } from './types';
 
 /**
- * 音频引擎单例
+ * 音频引擎类
  */
 class AudioEngine {
   private context: AudioContext | null = null;
   private initialized = false;
+  private bufferCache: Map<string, AudioBuffer> = new Map();
 
   /**
-   * 初始化音频上下文
+   * 初始化音频上下文并预生成缓存
    */
   async initialize(): Promise<void> {
     if (this.initialized && this.context) {
+      if (this.context.state === 'suspended') {
+        await this.context.resume();
+      }
       return;
     }
 
@@ -26,12 +30,38 @@ class AudioEngine {
       latencyHint: 'interactive'
     });
 
-    // 如果上下文被暂停，尝试恢复
     if (this.context.state === 'suspended') {
       await this.context.resume();
     }
 
+    // 预生成所有标准音色的 AudioBuffer
+    this.preGenerateBuffers();
     this.initialized = true;
+  }
+
+  /**
+   * 预生成所有音色的 AudioBuffer 缓存
+   */
+  private preGenerateBuffers(): void {
+    if (!this.context) return;
+
+    const ctx = this.context;
+    const drumTypes: DrumType[] = ['kick', 'snare', 'hihat', 'openHihat', 'crash', 'tom', 'ride'];
+
+    drumTypes.forEach(type => {
+      let buffer: AudioBuffer;
+      switch (type) {
+        case 'kick': buffer = this.createKickBuffer(ctx); break;
+        case 'snare': buffer = this.createSnareBuffer(ctx); break;
+        case 'hihat': buffer = this.createHiHatBuffer(ctx, 20); break;
+        case 'openHihat': buffer = this.createHiHatBuffer(ctx, 5); break;
+        case 'crash': buffer = this.createCrashBuffer(ctx); break;
+        case 'tom': buffer = this.createTomBuffer(ctx); break;
+        case 'ride': buffer = this.createRideBuffer(ctx); break;
+        default: return;
+      }
+      this.bufferCache.set(type, buffer);
+    });
   }
 
   /**
@@ -45,211 +75,151 @@ class AudioEngine {
   }
 
   /**
-   * 生成 Kick（底鼓）音色
-   * 标准 Sine Sweep：150Hz -> 40Hz
+   * 底鼓合成
    */
-  private generateKick(ctx: AudioContext, volume: number = 0.5): AudioBufferSourceNode {
-    const sampleRate = ctx.sampleRate;
+  private createKickBuffer(ctx: AudioContext): AudioBuffer {
     const duration = 0.5;
-    const frameCount = Math.floor(sampleRate * duration);
-    const buffer = ctx.createBuffer(1, frameCount, sampleRate);
+    const frameCount = ctx.sampleRate * duration;
+    const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
     const data = buffer.getChannelData(0);
 
-    // 标准频率扫描
     const startFreq = 150;
     const endFreq = 40;
-
     let phase = 0;
 
     for (let i = 0; i < frameCount; i++) {
-      const t = i / sampleRate;
-
-      // 频率包络：快速衰减
+      const t = i / ctx.sampleRate;
       const currentFreq = startFreq * Math.exp(-t * 20) + endFreq;
-
-      // 振幅包络
       const envelope = Math.exp(-t * 8);
-
-      // 简单防点击攻击包络 (前2ms)
       const attack = t < 0.002 ? t / 0.002 : 1.0;
-
-      phase += 2 * Math.PI * currentFreq / sampleRate;
-
-      data[i] = Math.sin(phase) * envelope * attack * volume;
+      phase += 2 * Math.PI * currentFreq / ctx.sampleRate;
+      data[i] = Math.sin(phase) * envelope * attack;
     }
-
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    return source;
+    return buffer;
   }
 
   /**
-   * 生成 Snare（军鼓）音色
+   * 军鼓合成
    */
-  private generateSnare(ctx: AudioContext, volume: number = 0.5): AudioBufferSourceNode {
-    const sampleRate = ctx.sampleRate;
-    const duration = 0.15; // 150ms
-    const frameCount = Math.floor(sampleRate * duration);
-    const buffer = ctx.createBuffer(1, frameCount, sampleRate);
+  private createSnareBuffer(ctx: AudioContext): AudioBuffer {
+    const duration = 0.15;
+    const frameCount = ctx.sampleRate * duration;
+    const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
     const data = buffer.getChannelData(0);
 
-    // 白噪声 + 包络
     for (let i = 0; i < frameCount; i++) {
-      const t = i / sampleRate;
-      const envelope = Math.exp(-t * 15); // 快速衰减
+      const t = i / ctx.sampleRate;
+      const envelope = Math.exp(-t * 15);
       const noise = (Math.random() * 2 - 1) * envelope;
-
-      // 添加一些低频成分
       const lowFreq = Math.sin(2 * Math.PI * 200 * t) * Math.exp(-t * 10);
-      data[i] = (noise * 0.7 + lowFreq * 0.3) * volume;
+      data[i] = (noise * 0.7 + lowFreq * 0.3);
     }
-
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    return source;
+    return buffer;
   }
 
   /**
-   * 生成 HiHat（踩镲）音色
+   * 踩镲合成
    */
-  private generateHiHat(ctx: AudioContext, volume: number = 0.3, decay: number = 20): AudioBufferSourceNode {
-    const sampleRate = ctx.sampleRate;
+  private createHiHatBuffer(ctx: AudioContext, decay: number): AudioBuffer {
     const duration = 6.0 / decay;
-    const frameCount = Math.floor(sampleRate * duration);
-    const buffer = ctx.createBuffer(1, frameCount, sampleRate);
+    const frameCount = ctx.sampleRate * duration;
+    const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
     const data = buffer.getChannelData(0);
 
-    // 高频噪声 + 衰减
     for (let i = 0; i < frameCount; i++) {
-      const t = i / sampleRate;
+      const t = i / ctx.sampleRate;
       const envelope = Math.exp(-t * decay);
       const noise = (Math.random() * 2 - 1) * envelope;
-
-      // 添加高频成分
       const highFreq = Math.sin(2 * Math.PI * 9000 * t) * Math.exp(-t * decay * 1.5);
-      data[i] = (noise * 0.8 + highFreq * 0.2) * volume;
+      data[i] = (noise * 0.8 + highFreq * 0.2);
     }
-
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    return source;
+    return buffer;
   }
 
   /**
-   * 生成 Crash（碎音）音色
+   * 碎音合成
    */
-  private generateCrash(ctx: AudioContext, volume: number = 0.4): AudioBufferSourceNode {
-    const sampleRate = ctx.sampleRate;
-    const duration = 0.5; // 500ms
-    const frameCount = Math.floor(sampleRate * duration);
-    const buffer = ctx.createBuffer(1, frameCount, sampleRate);
+  private createCrashBuffer(ctx: AudioContext): AudioBuffer {
+    const duration = 0.5;
+    const frameCount = ctx.sampleRate * duration;
+    const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
     const data = buffer.getChannelData(0);
 
-    // 高频噪声 + 长衰减
     for (let i = 0; i < frameCount; i++) {
-      const t = i / sampleRate;
-      const envelope = Math.exp(-t * 3); // 慢衰减
+      const t = i / ctx.sampleRate;
+      const envelope = Math.exp(-t * 3);
       const noise = (Math.random() * 2 - 1) * envelope;
-
-      // 添加多个频率成分
       const freq1 = Math.sin(2 * Math.PI * 8000 * t) * Math.exp(-t * 5);
       const freq2 = Math.sin(2 * Math.PI * 12000 * t) * Math.exp(-t * 8);
-      data[i] = (noise * 0.6 + freq1 * 0.2 + freq2 * 0.2) * volume;
+      data[i] = (noise * 0.6 + freq1 * 0.2 + freq2 * 0.2);
     }
-
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    return source;
+    return buffer;
   }
 
   /**
-   * 生成 Tom（桶鼓）音色
+   * 桶鼓合成
    */
-  private generateTom(ctx: AudioContext, volume: number = 0.4): AudioBufferSourceNode {
-    const sampleRate = ctx.sampleRate;
-    const duration = 0.25; // 250ms
-    const frameCount = Math.floor(sampleRate * duration);
-    const buffer = ctx.createBuffer(1, frameCount, sampleRate);
+  private createTomBuffer(ctx: AudioContext): AudioBuffer {
+    const duration = 0.25;
+    const frameCount = ctx.sampleRate * duration;
+    const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
     const data = buffer.getChannelData(0);
 
-    // 中频正弦波 + 衰减
-    const freq = 150; // 150Hz
+    const freq = 150;
     for (let i = 0; i < frameCount; i++) {
-      const t = i / sampleRate;
+      const t = i / ctx.sampleRate;
       const envelope = Math.exp(-t * 6);
-      data[i] = Math.sin(2 * Math.PI * freq * t) * envelope * volume;
+      data[i] = Math.sin(2 * Math.PI * freq * t) * envelope;
     }
-
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    return source;
+    return buffer;
   }
 
   /**
-   * 生成 Ride（叮叮镲）音色
+   * 叮叮镲合成
    */
-  private generateRide(ctx: AudioContext, volume: number = 0.3): AudioBufferSourceNode {
-    const sampleRate = ctx.sampleRate;
-    const duration = 0.4; // 400ms
-    const frameCount = Math.floor(sampleRate * duration);
-    const buffer = ctx.createBuffer(1, frameCount, sampleRate);
+  private createRideBuffer(ctx: AudioContext): AudioBuffer {
+    const duration = 0.4;
+    const frameCount = ctx.sampleRate * duration;
+    const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
     const data = buffer.getChannelData(0);
 
-    // 中高频噪声 + 中等衰减
     for (let i = 0; i < frameCount; i++) {
-      const t = i / sampleRate;
+      const t = i / ctx.sampleRate;
       const envelope = Math.exp(-t * 4);
       const noise = (Math.random() * 2 - 1) * envelope;
-
       const freq = Math.sin(2 * Math.PI * 5000 * t) * Math.exp(-t * 6);
-      data[i] = (noise * 0.5 + freq * 0.5) * volume;
+      data[i] = (noise * 0.5 + freq * 0.5);
     }
-
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    return source;
+    return buffer;
   }
 
   /**
-   * 播放指定类型的鼓点
+   * 播放鼓点
    */
   playDrum(type: DrumType, volume: number = 0.5, timeOffset: number = 0): void {
-    if (!this.context || this.context.state !== 'running') {
-      return;
-    }
+    if (!this.context || this.context.state !== 'running') return;
 
     const ctx = this.context;
-    const now = ctx.currentTime + timeOffset;
+    let buffer = this.bufferCache.get(type);
 
-    let source: AudioBufferSourceNode;
-
-    switch (type) {
-      case 'kick':
-        source = this.generateKick(ctx, volume);
-        break;
-      case 'snare':
-        source = this.generateSnare(ctx, volume);
-        break;
-      case 'hihat':
-        // 标准 Closed HiHat (Pedal)
-        source = this.generateHiHat(ctx, volume, 20);
-        break;
-      case 'openHihat':
-        // Open HiHat
-        source = this.generateHiHat(ctx, volume, 5);
-        break;
-      case 'crash':
-        source = this.generateCrash(ctx, volume);
-        break;
-      case 'tom':
-        source = this.generateTom(ctx, volume);
-        break;
-      case 'ride':
-        source = this.generateRide(ctx, volume);
-        break;
-      default:
-        return;
+    if (!buffer) {
+      // 容错处理：如果缓存中没有，现场生成（通常不应发生）
+      switch (type) {
+        case 'kick': buffer = this.createKickBuffer(ctx); break;
+        case 'snare': buffer = this.createSnareBuffer(ctx); break;
+        case 'hihat': buffer = this.createHiHatBuffer(ctx, 20); break;
+        case 'openHihat': buffer = this.createHiHatBuffer(ctx, 5); break;
+        case 'crash': buffer = this.createCrashBuffer(ctx); break;
+        case 'tom': buffer = this.createTomBuffer(ctx); break;
+        case 'ride': buffer = this.createRideBuffer(ctx); break;
+        default: return;
+      }
+      this.bufferCache.set(type, buffer);
     }
+
+    const now = ctx.currentTime + timeOffset;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
 
     const gainNode = ctx.createGain();
     gainNode.gain.value = volume;
@@ -258,15 +228,15 @@ class AudioEngine {
     gainNode.connect(ctx.destination);
 
     source.start(now);
-    source.stop(now + 1); // 确保在1秒后停止
+    // 长衰减音色（如Crash）可能需要超过1秒，这里统一设置长一点的停止时间
+    source.stop(now + 2.0);
   }
 
   /**
-   * 播放节拍步骤（支持 DrumStep 对象）
+   * 播放节拍步骤
    */
   playDrumStep(step: DrumStep | number, timeOffset: number = 0): void {
     if (typeof step === 'number') {
-      // 向后兼容：将数字映射到音色类型
       const typeMap: DrumType[] = ['kick', 'hihat', 'snare', 'hihat'];
       const type = typeMap[step % typeMap.length] || 'kick';
       this.playDrum(type, 0.5, timeOffset);
@@ -276,12 +246,8 @@ class AudioEngine {
   }
 }
 
-// 单例实例
+// 单例模式
 let engineInstance: AudioEngine | null = null;
-
-/**
- * 获取音频引擎单例
- */
 export function getAudioEngine(): AudioEngine {
   if (!engineInstance) {
     engineInstance = new AudioEngine();
@@ -290,22 +256,14 @@ export function getAudioEngine(): AudioEngine {
 }
 
 /**
- * 播放鼓点步骤（缓存版本，用于向后兼容）
+ * 以下导出用于向后兼容
  */
 export function playDrumStepCached(ctx: AudioContext, step: number | DrumStep): void {
   const engine = getAudioEngine();
-  if (engine.getContext() !== ctx) {
-    // 如果上下文不同，重新初始化（虽然通常不会发生）
-    engine.initialize();
-  }
   engine.playDrumStep(step);
 }
 
-/**
- * 播放鼓点步骤（直接版本）
- */
 export function playDrumStep(step: DrumStep | number, timeOffset?: number): void {
   const engine = getAudioEngine();
-  engine.playDrumStep(step, timeOffset);
+  engine.playDrumStep(step, timeOffset || 0);
 }
-

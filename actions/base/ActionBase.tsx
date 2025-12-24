@@ -3,7 +3,8 @@
  */
 
 import React from 'react';
-import { DetectionResult, ActionCategory, BeatAudioConfig } from './types';
+import { DetectionResult, ActionCategory, BeatAudioConfig, BodyPart } from './types';
+export type { DetectionResult, ActionCategory, BeatAudioConfig, BodyPart };
 import type { BeatPattern as NewBeatPattern, DrumStep } from '../../beats/types';
 
 /**
@@ -23,13 +24,13 @@ export interface DisplayProps {
 }
 
 /**
- * 节拍模式配置（向后兼容）
- * 支持旧格式 pattern: number[] 和新格式 pattern: DrumStep[]
+ * 节拍模式配置
+ * 使用 DrumStep[] 或 DrumStep[][] 定义鼓点序列
  */
 export interface BeatPattern {
   bpm: number;                    // 节拍速度
-  pattern: number[] | DrumStep[]; // 节拍模式（支持新旧两种格式）
-  audioConfig?: BeatAudioConfig;  // 音效配置（可选，向后兼容）
+  pattern: DrumStep[] | DrumStep[][]; // 节拍模式 (支持单音轨或多音轨)
+  templateId?: string;            // 节拍模板ID (可选，如果使用了节拍编辑器保存的模板)
   timeSignature?: [number, number]; // 拍号（可选）
   swing?: number;                 // 摇摆感（可选）
 }
@@ -51,8 +52,9 @@ export interface ActionComponent {
   name: string;
   englishName: string;
   category: ActionCategory;
+  targetParts: BodyPart[];
   durationSeconds: number;
-  
+
   // 四个核心组件
   Guide: React.ComponentType<GuideProps>;
   Beat: BeatPattern;

@@ -25,5 +25,7 @@ export interface ActionCompletion {
 // 从 beats 模块导入节拍相关类型
 export type { BeatAudioConfig, BeatPattern, DrumStep, DrumType } from '../../beats/types';
 
+export type BodyPart = 'arms' | 'legs' | 'core' | 'full-body' | 'shoulders' | 'back' | 'chest' | 'neck';
+
 export type ActionCategory = 'cardio' | 'strength' | 'flexibility' | 'balance';
 

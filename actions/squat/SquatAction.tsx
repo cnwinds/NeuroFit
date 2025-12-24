@@ -1,0 +1,26 @@
+/**
+ * SQUAT动作组件
+ */
+
+import React from 'react';
+import { ActionComponent } from '../base/ActionBase';
+import { GenericActionGuide } from '../base/GenericActionGuide';
+import { SquatDetector } from './SquatDetector';
+
+export const SquatAction: ActionComponent = {
+    name: '深蹲',
+    englishName: 'SQUAT',
+    category: 'strength',
+    targetParts: ['legs'],
+    durationSeconds: 45,
+    Guide: (props) => <GenericActionGuide actionName="SQUAT" {...props} />,
+    Beat: {
+        bpm: 80,
+        pattern: [
+            { type: 'kick', volume: 1.0 },
+            { type: 'snare', volume: 0.8 },
+        ],
+    },
+    Detector: new SquatDetector(),
+    Display: () => null,
+};

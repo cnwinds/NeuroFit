@@ -5,16 +5,11 @@
 import { BeatPattern } from '../base/ActionBase';
 
 export const JumpBeat: BeatPattern = {
-  bpm: 120,  // 每分钟120拍
-  pattern: [0, 1, 2, 3],  // DONG-CI-DA-CI 循环
-  audioConfig: {
-    steps: [
-      { frequency: 440, type: 'sine', volume: 0.3 },
-      { frequency: 550, type: 'sine', volume: 0.2 },
-      { frequency: 660, type: 'sine', volume: 0.3 },
-      { frequency: 550, type: 'sine', volume: 0.2 },
-    ]
-  }
+  bpm: 120,
+  pattern: [
+    { type: 'kick', volume: 1.0 },
+    { type: 'hihat', volume: 0.6 },
+    { type: 'snare', volume: 0.8 },
+    { type: 'hihat', volume: 0.6 },
+  ],
 };
-
-

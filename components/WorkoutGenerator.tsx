@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
 import { Difficulty, WorkoutPlan } from '../types';
-import { generateWorkoutPlan } from '../services/geminiService';
 import { generateWorkoutPlanFromActions } from '../services/actionWorkoutGenerator';
 import { Zap, Clock, Activity, BrainCircuit, Rocket, Music, Sparkles } from 'lucide-react';
 
@@ -15,89 +14,50 @@ const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor }
   const [duration, setDuration] = useState(7);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.BEGINNER);
   const [userState, setUserState] = useState('');
-  const [useActionSystem, setUseActionSystem] = useState(true); // 默认使用action系统
 
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState("准备生成计划...");
-  const [generatedChars, setGeneratedChars] = useState(0);
 
-  const getStatusFromChars = (chars: number) => {
-    if (chars < 100) return "连接 Gemini 神经中枢...";
-    if (chars < 400) return "分析您的体能数据...";
-    if (chars < 800) return "构建核心动作序列...";
-    if (chars < 1400) return "优化心率节奏...";
-    return "封装最终计划...";
-  };
-
-  const handleGenerate = async (isMock: boolean = false) => {
+  const handleGenerate = async () => {
     setLoading(true);
     setProgress(0);
-    setGeneratedChars(0);
 
     try {
-      let plan: WorkoutPlan;
+      setStatusText("正在组织动作序列...");
+      setProgress(20);
 
-      // 使用Action系统生成计划
-      if (useActionSystem && !isMock) {
-        setStatusText("正在组织动作序列...");
-        setProgress(20);
+      // 模拟进度
+      const progressInterval = setInterval(() => {
+        setProgress(prev => Math.min(prev + 10, 90));
+      }, 100);
 
-        // 模拟进度
-        const progressInterval = setInterval(() => {
-          setProgress(prev => Math.min(prev + 10, 90));
-        }, 100);
+      await new Promise(resolve => setTimeout(resolve, 800));
 
-        await new Promise(resolve => setTimeout(resolve, 300)); // 短暂延迟以显示进度
+      const plan = generateWorkoutPlanFromActions(
+        focus,
+        duration,
+        difficulty,
+        userState || ''
+      );
 
-        plan = generateWorkoutPlanFromActions(
-          focus,
-          duration,
-          difficulty,
-          userState || ''
-        );
-
-        clearInterval(progressInterval);
-        setProgress(100);
-        setStatusText("计划生成完成！");
-      } else {
-        // 使用AI生成计划（原有逻辑）
-        setStatusText(isMock ? "加载离线演示数据..." : "正在连接 AI...");
-        const ESTIMATED_SIZE = 2500;
-        plan = await generateWorkoutPlan(
-          focus,
-          duration,
-          difficulty,
-          userState || '正常',
-          (chars) => {
-            setGeneratedChars(chars);
-            if (!isMock) {
-              setStatusText(getStatusFromChars(chars));
-              const pct = Math.min(Math.floor((chars / ESTIMATED_SIZE) * 100), 98);
-              setProgress(pct);
-            } else {
-              setProgress(100);
-            }
-          },
-          isMock
-        );
-        setProgress(100);
-        setStatusText(isMock ? "演示加载完毕" : "生成完成！");
-      }
+      clearInterval(progressInterval);
+      setProgress(100);
+      setStatusText("计划生成完成！");
 
       setTimeout(() => {
         onPlanGenerated(plan);
       }, 500);
     } catch (error) {
       console.error(error);
-      alert('生成失败，请检查网络或 API Key。');
+      alert('生成失败，请重试。');
       setLoading(false);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    handleGenerate(false);
+    handleGenerate();
   }
 
   return (
@@ -110,32 +70,6 @@ const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor }
         <p className="text-slate-400 text-sm">AI 驱动的科学交互式训练</p>
       </div>
 
-      {/* 生成模式选择 */}
-      <div className="mb-5 p-4 bg-slate-800/50 border border-slate-700 rounded-xl">
-        <label className="flex items-center justify-between cursor-pointer">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-purple-400" />
-            <span className="text-sm font-bold text-slate-300">使用动作系统</span>
-            <span className="text-xs text-slate-500">(基于已注册的动作组件)</span>
-          </div>
-          <div className="relative">
-            <input
-              type="checkbox"
-              checked={useActionSystem}
-              onChange={(e) => setUseActionSystem(e.target.checked)}
-              className="sr-only"
-            />
-            <div className={`w-14 h-7 rounded-full transition-colors flex items-center ${useActionSystem ? 'bg-teal-500' : 'bg-slate-600'
-              }`}>
-              <div className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform ${useActionSystem ? 'translate-x-8' : 'translate-x-1'
-                }`}></div>
-            </div>
-          </div>
-        </label>
-        {!useActionSystem && (
-          <p className="mt-2 text-xs text-slate-500">切换到AI模式将使用Gemini生成个性化计划</p>
-        )}
-      </div>
 
       <form onSubmit={handleSubmit} className={`space-y-5 transition-all duration-500 ${loading ? 'opacity-10 blur-sm pointer-events-none scale-95' : 'opacity-100 scale-100'}`}>
         <div>
@@ -184,8 +118,8 @@ const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor }
                 type="button"
                 onClick={() => setDifficulty(d)}
                 className={`py-2 rounded-xl text-xs font-bold transition-all ${difficulty === d
-                    ? 'bg-teal-600 text-white shadow-lg shadow-teal-500/30'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                  ? 'bg-teal-600 text-white shadow-lg shadow-teal-500/30'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                   }`}
               >
                 {d}
@@ -217,16 +151,6 @@ const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor }
               <Rocket className="w-5 h-5" />
               开始生成
             </button>
-
-            <button
-              type="button"
-              onClick={() => handleGenerate(true)}
-              disabled={loading}
-              className="w-14 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-2xl active:scale-95 transition-all flex items-center justify-center shadow-xl min-h-[56px]"
-              title="离线模式"
-            >
-              <Rocket className="w-5 h-5" />
-            </button>
           </div>
 
           {onOpenBeatEditor && (
@@ -247,8 +171,7 @@ const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor }
           <div className="mb-6">
             <BrainCircuit className="w-16 h-16 text-teal-400 animate-pulse" />
           </div>
-          <h3 className="text-2xl font-black text-white mb-1">正在规划</h3>
-          <p className="text-teal-500 font-mono text-[10px] mb-6">{generatedChars} bits synched</p>
+          <h3 className="text-2xl font-black text-white mb-6">正在规划</h3>
 
           <div className="w-full max-w-xs bg-slate-800 rounded-full h-2 mb-4 overflow-hidden border border-slate-700 shadow-inner">
             <div

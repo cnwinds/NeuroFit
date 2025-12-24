@@ -13,6 +13,7 @@ export const JumpAction: ActionComponent = {
   name: '跳跃',
   englishName: 'JUMP',
   category: 'cardio',
+  targetParts: ['legs'],
   durationSeconds: 30,
   Guide: JumpGuide,
   Beat: JumpBeat,
