@@ -22,7 +22,7 @@ export const SayHiDisplay: React.FC<DisplayProps> = ({ accuracy, beatStep }) => 
   const [combo, setCombo] = useState(0);
   const [hitResult, setHitResult] = useState<HitResult>({ show: false, text: '', color: '' });
   const [lastBeatStep, setLastBeatStep] = useState(-1);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const noteIdRef = useRef(0);
 
@@ -187,10 +187,9 @@ export const SayHiDisplay: React.FC<DisplayProps> = ({ accuracy, beatStep }) => 
             borderRadius: '50%',
             background: note.hit ? 'transparent' : getNoteColor(note.type),
             boxShadow: note.hit ? 'none' : `0 0 20px ${getNoteColor(note.type)}`,
-            transform: 'translate(-50%, -50%)',
+            transform: note.hit ? 'translate(-50%, -50%) scale(2)' : 'translate(-50%, -50%)',
             opacity: note.hit ? 0 : 1,
             transition: note.hit ? 'opacity 0.2s, transform 0.2s' : 'none',
-            transform: note.hit ? 'translate(-50%, -50%) scale(2)' : 'translate(-50%, -50%)',
           }}
         >
           {!note.hit && (
