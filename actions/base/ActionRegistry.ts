@@ -57,3 +57,4 @@ export function getActionsByCategory(category: string): ActionComponent[] {
   return getAllActions().filter(action => action.category === category);
 }
 
+

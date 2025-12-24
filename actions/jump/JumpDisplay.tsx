@@ -13,3 +13,4 @@ export const JumpDisplay: React.FC<DisplayProps> = ({ landmarks, accuracy, beatS
   return null; // 返回null表示使用默认的骨架显示
 };
 
+

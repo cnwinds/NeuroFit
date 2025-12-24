@@ -9,11 +9,22 @@
 // 从 beats 模块导入节拍功能（向后兼容）
 // ============================================================================
 
-export {
-  pregenerateDrumBuffers,
-  playDrumStepCached,
-  clearAudioCache,
-} from '../beats';
+// 向后兼容：导出节拍相关函数
+export { playDrumStepCached } from '../beats';
+
+// 兼容函数：pregenerateDrumBuffers（新系统不需要预生成，但提供空实现以保持兼容）
+export async function pregenerateDrumBuffers(ctx: AudioContext): Promise<void> {
+  // 新系统使用实时合成，不需要预生成
+  // 但为了兼容性，我们初始化音频引擎
+  const { getAudioEngine } = await import('../beats');
+  const engine = getAudioEngine();
+  await engine.initialize();
+}
+
+// 兼容函数：clearAudioCache（新系统不需要缓存）
+export function clearAudioCache(): void {
+  // 新系统不使用缓存，此函数为空实现
+}
 
 // ============================================================================
 // 常量配置

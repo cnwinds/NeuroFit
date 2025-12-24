@@ -4,6 +4,7 @@ import WorkoutGenerator from './components/WorkoutGenerator';
 import Player from './components/Player';
 import BeatEditor from './components/BeatEditor';
 import { WorkoutPlan } from './types';
+import { type SavedBeatPattern } from './beats';
 
 type Page = 'home' | 'beat-editor' | 'player';
 
@@ -32,9 +33,15 @@ const App: React.FC = () => {
             />
           </div>
         )}
-        
+
         {currentPage === 'beat-editor' && (
-          <BeatEditor onClose={() => setCurrentPage('home')} />
+          <BeatEditor
+            onClose={() => setCurrentPage('home')}
+            onSave={(pattern: SavedBeatPattern) => {
+              console.log('节拍模式已保存:', pattern);
+              // 可以在这里添加将节拍应用到健身计划的逻辑
+            }}
+          />
         )}
         
         {currentPage === 'player' && currentPlan && (

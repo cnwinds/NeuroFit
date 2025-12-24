@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { WorkoutPlan, PlayerState } from '../types';
 import { generateStickFigureAnimation } from '../services/geminiService';
 import { decodeAudioData, playTone, playSuccessSound, playCountdownBeep, playDrumStepCached, pregenerateDrumBuffers } from '../services/audioUtils';
-import { convertLegacyPattern, type DrumStep } from '../beats';
+import { convertLegacyPattern, type DrumStep, getAudioEngine } from '../beats';
 import { Play, Pause, SkipForward, CheckCircle, Star, Loader2, Camera, X, Activity, ChevronDown, ChevronUp } from 'lucide-react';
 import { PoseLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import { getAction, ActionComponent } from '../actions';
@@ -571,18 +571,28 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
                          const audioStartTime = performance.now();
                          
                          // 使用缓存的音频缓冲区播放（零延迟，高性能）
-                         // playDrumStepCached 支持 number（旧格式）和 DrumStep（新格式）
+                         // 支持 number（旧格式）、DrumStep（新格式）和 DrumStep[]（多乐器）
                          const step = patternSteps[next];
-                         if (typeof step === 'number') {
+                         if (Array.isArray(step)) {
+                             // 新格式：数组，支持多个乐器同时播放
+                             const engine = getAudioEngine();
+                             step.forEach(drumStep => {
+                                 if (drumStep && typeof drumStep === 'object' && drumStep.volume > 0) {
+                                     engine.playDrumStep(drumStep);
+                                 }
+                             });
+                         } else if (typeof step === 'number') {
                              // 旧格式：直接传递 number
                              playDrumStepCached(audioContextRef.current, step);
-                         } else {
-                             // 新格式：需要转换为 number 或使用新的播放器
-                             // 暂时使用类型映射（向后兼容）
-                             const legacyStep = step.type === 'kick' ? 0 :
-                                               step.type === 'hihat' ? 1 :
-                                               step.type === 'snare' ? 2 : 1;
-                             playDrumStepCached(audioContextRef.current, legacyStep);
+                         } else if (step && typeof step === 'object') {
+                             // 单个 DrumStep 对象
+                             if (step.volume > 0) {
+                                 // 对于单个 DrumStep，使用类型映射（向后兼容）
+                                 const legacyStep = step.type === 'kick' ? 0 :
+                                                   step.type === 'hihat' ? 1 :
+                                                   step.type === 'snare' ? 2 : 1;
+                                 playDrumStepCached(audioContextRef.current, legacyStep);
+                             }
                          }
                          
                          // 性能监控：记录音频播放耗时

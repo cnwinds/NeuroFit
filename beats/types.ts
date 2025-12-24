@@ -3,32 +3,22 @@
  */
 
 /**
- * 鼓点类型枚举
+ * 鼓点音色类型
  */
-export type DrumType = 'kick' | 'snare' | 'hihat' | 'crash' | 'openHihat' | 'rimshot';
+export type DrumType = 'kick' | 'snare' | 'hihat' | 'openHihat' | 'crash' | 'tom' | 'ride';
 
 /**
- * 单个鼓点步骤
+ * 单个节拍步骤
+ * 表示在特定时间点播放的音色
  */
 export interface DrumStep {
   type: DrumType;
-  velocity: number;  // 0-127
-  timing?: number;   // 相对时间偏移（微调，秒）
+  volume: number;      // 0.0 - 1.0
+  timeOffset?: number; // 时间偏移（秒），用于摇摆感等
 }
 
 /**
- * 节拍模式配置
- */
-export interface BeatPattern {
-  bpm: number;                    // 节拍速度
-  pattern: DrumStep[];            // 节拍模式
-  timeSignature?: [number, number]; // 拍号，如 [4, 4]
-  swing?: number;                 // 摇摆感 (0-1)
-  audioConfig?: BeatAudioConfig;  // 音效配置（向后兼容）
-}
-
-/**
- * 音效配置（向后兼容）
+ * 音频配置（用于向后兼容）
  */
 export interface BeatAudioConfig {
   steps: Array<{
@@ -39,46 +29,30 @@ export interface BeatAudioConfig {
 }
 
 /**
- * 合成参数接口
+ * 节拍模式配置
+ * pattern 现在支持每个时间点包含多个乐器
  */
-export interface DrumSynthesisParams {
-  sampleRate: number;
-  duration: number;
-  velocity: number;  // 0-127
-  fundamental?: number;  // 基础频率（可选）
+export interface BeatPattern {
+  bpm: number;                    // 节拍速度（每分钟节拍数）
+  pattern: number[] | DrumStep[] | DrumStep[][]; // 节拍模式数组，支持单个或多个乐器
+  audioConfig?: BeatAudioConfig;  // 音频配置（可选，向后兼容）
+  timeSignature?: [number, number]; // 拍号，如 [4, 4] 表示 4/4 拍
+  swing?: number;                 // 摇摆感（0-100%）
 }
 
 /**
- * 效果链配置接口
+ * 保存的节拍模式
+ * pattern 现在支持每个时间点包含多个乐器
  */
-export interface EffectChainConfig {
-  compressor?: {
-    enabled: boolean;
-    threshold?: number;
-    ratio?: number;
-    attack?: number;
-    release?: number;
-  };
-  equalizer?: {
-    enabled: boolean;
-    low?: number;   // 低频增益 (dB)
-    mid?: number;   // 中频增益 (dB)
-    high?: number;  // 高频增益 (dB)
-  };
-  reverb?: {
-    enabled: boolean;
-    roomSize?: number;  // 0-1
-    wetLevel?: number; // 0-1
-  };
-  transient?: {
-    enabled: boolean;
-    attack?: number;   // 0-1
-    sustain?: number;  // 0-1
-  };
+export interface SavedBeatPattern {
+  id: string;
+  name: string;
+  bpm: number;
+  pattern: DrumStep[] | DrumStep[][]; // 支持单个或多个乐器
+  timeSignature: [number, number];
+  swing: number;
+  length: number; // 模式长度（步数）
+  createdAt: number;
+  updatedAt: number;
 }
-
-/**
- * 缓存键格式
- */
-export type CacheKey = string;
 
