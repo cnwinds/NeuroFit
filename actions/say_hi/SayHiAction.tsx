@@ -2,10 +2,9 @@
  * SAY HI动作组件
  */
 
-import React from 'react';
 import { ActionComponent } from '../base/ActionBase';
-import { SimpleDetector } from '../base/SimpleDetector';
 import { SayHiGuide } from './SayHiGuide';
+import { SayHiDetector } from './SayHiDetector';
 
 export const SayHiAction: ActionComponent = {
     name: '打招呼',
@@ -21,11 +20,6 @@ export const SayHiAction: ActionComponent = {
             { type: 'hihat', volume: 0.4 },
         ],
     },
-    Detector: new SimpleDetector({
-        type: 'distance',
-        points: [16, 0], // 右手腕 vs 鼻子
-        threshold: 0.2,
-        direction: 'less'
-    }),
+    Detector: new SayHiDetector(),
     Display: () => null,
 };

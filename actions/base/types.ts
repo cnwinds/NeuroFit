@@ -11,8 +11,9 @@ export enum ActionScore {
 
 export interface DetectionResult {
   isCompleted: boolean;
-  accuracy: number;  // 0-100
-  confidence: number; // 0-1
+  accuracy: number;  // 0-1
+  confidence?: number; // 0-1
+  feedback?: string; // Optional feedback message
 }
 
 export interface ActionCompletion {
