@@ -6,44 +6,34 @@
 import React, { useEffect } from 'react';
 import { ActionScore } from '../actions/base/types';
 import { getScoreText, getScoreColor } from '../services/scoreCalculator';
-import { playMissSound, playBadSound, playGoodSound, playExcellentSound } from '../services/audioUtils';
+import { getAudioEngine } from '../beats/audioEngine';
 
 interface CompletionEffectProps {
   score: ActionScore;
-  audioContext: AudioContext | null;
   onComplete: () => void;
 }
 
-export const CompletionEffect: React.FC<CompletionEffectProps> = ({ 
-  score, 
-  audioContext,
-  onComplete 
+export const CompletionEffect: React.FC<CompletionEffectProps> = ({
+  score,
+  onComplete
 }) => {
   useEffect(() => {
-    if (!audioContext || audioContext.state !== 'running') return;
+    const engine = getAudioEngine();
 
     // 根据评分播放不同的音效
     switch (score) {
-      case ActionScore.EXCELLENT:
-        playExcellentSound(audioContext);
-        break;
-      case ActionScore.GOOD:
-        playGoodSound(audioContext);
-        break;
-      case ActionScore.BAD:
-        playBadSound(audioContext);
-        break;
-      case ActionScore.MISS:
-        playMissSound(audioContext);
-        break;
+      case ActionScore.EXCELLENT: engine.playExcellent(); break;
+      case ActionScore.GOOD: engine.playGood(); break;
+      case ActionScore.BAD: engine.playBad(); break;
+      case ActionScore.MISS: engine.playMiss(); break;
     }
-  }, [score, audioContext]);
+  }, [score]);
 
   // 3秒后自动完成
   useEffect(() => {
     const timer = setTimeout(() => {
       onComplete();
-    }, 3000);
+    }, 1500); // 缩短完成效果时间，提高节奏感
 
     return () => clearTimeout(timer);
   }, [onComplete]);
@@ -51,29 +41,21 @@ export const CompletionEffect: React.FC<CompletionEffectProps> = ({
   const scoreText = getScoreText(score);
   const scoreColor = getScoreColor(score);
 
-  // 根据评分显示不同的视觉效果
   const getBackgroundClass = () => {
     switch (score) {
-      case ActionScore.EXCELLENT:
-        return 'bg-gradient-to-br from-yellow-500/30 to-orange-500/30';
-      case ActionScore.GOOD:
-        return 'bg-gradient-to-br from-green-500/30 to-teal-500/30';
-      case ActionScore.BAD:
-        return 'bg-gradient-to-br from-orange-500/30 to-red-500/30';
-      case ActionScore.MISS:
-        return 'bg-gradient-to-br from-red-500/30 to-pink-500/30';
-      default:
-        return 'bg-black/40';
+      case ActionScore.EXCELLENT: return 'bg-yellow-500/20';
+      case ActionScore.GOOD: return 'bg-green-500/20';
+      case ActionScore.BAD: return 'bg-orange-500/20';
+      case ActionScore.MISS: return 'bg-red-500/20';
+      default: return 'bg-black/40';
     }
   };
 
   return (
-    <div className={`absolute inset-0 flex items-center justify-center backdrop-blur-sm ${getBackgroundClass()}`}>
-      <div className={`text-6xl md:text-8xl font-black italic tracking-tighter animate-bounce ${scoreColor}`}>
+    <div className={`absolute inset-0 flex items-center justify-center backdrop-blur-md z-[100] transition-all duration-300 ${getBackgroundClass()}`}>
+      <div className={`text-7xl md:text-9xl font-black italic tracking-tighter animate-ping-short ${scoreColor}`} style={{ textShadow: '0 0 30px currentColor' }}>
         {scoreText}
       </div>
     </div>
   );
 };
-
-

@@ -1,10 +1,5 @@
-/**
- * SQUAT动作组件
- */
-
-import React from 'react';
 import { ActionComponent } from '../base/ActionBase';
-import { GenericActionGuide } from '../base/GenericActionGuide';
+import { SquatGuide } from './SquatGuide';
 import { SquatDetector } from './SquatDetector';
 
 export const SquatAction: ActionComponent = {
@@ -13,7 +8,7 @@ export const SquatAction: ActionComponent = {
     category: 'strength',
     targetParts: ['legs'],
     durationSeconds: 45,
-    Guide: (props) => <GenericActionGuide actionName="SQUAT" {...props} />,
+    Guide: (props) => <SquatGuide {...props} />,
     Beat: {
         bpm: 80,
         pattern: [

@@ -35,19 +35,20 @@ class AudioEngine {
     }
 
     // 预生成所有标准音色的 AudioBuffer
-    this.preGenerateBuffers();
+    await this.preGenerateBuffers();
     this.initialized = true;
   }
 
   /**
    * 预生成所有音色的 AudioBuffer 缓存
    */
-  private preGenerateBuffers(): void {
+  private async preGenerateBuffers(): Promise<void> {
     if (!this.context) return;
 
     const ctx = this.context;
-    const drumTypes: DrumType[] = ['kick', 'snare', 'hihat', 'openHihat', 'crash', 'tom', 'ride'];
 
+    // 1. 鼓点音色
+    const drumTypes: DrumType[] = ['kick', 'snare', 'hihat', 'openHihat', 'crash', 'tom', 'ride'];
     drumTypes.forEach(type => {
       let buffer: AudioBuffer;
       switch (type) {
@@ -62,6 +63,22 @@ class AudioEngine {
       }
       this.bufferCache.set(type, buffer);
     });
+
+    // 2. 反馈音效
+    const feedbackSounds = ['excellent', 'good', 'bad', 'miss', 'beep_low', 'beep_high'];
+    for (const action of feedbackSounds) {
+      const offlineCtx = new OfflineAudioContext(1, ctx.sampleRate * 0.6, ctx.sampleRate);
+      switch (action) {
+        case 'excellent': this.renderExcellent(offlineCtx); break;
+        case 'good': this.renderGood(offlineCtx); break;
+        case 'bad': this.renderBad(offlineCtx); break;
+        case 'miss': this.renderMiss(offlineCtx); break;
+        case 'beep_low': this.renderTone(offlineCtx, 440, 0.1, 'square'); break;
+        case 'beep_high': this.renderTone(offlineCtx, 880, 0.1, 'square'); break;
+      }
+      const buffer = await offlineCtx.startRendering();
+      this.bufferCache.set(action, buffer);
+    }
   }
 
   /**
@@ -69,24 +86,22 @@ class AudioEngine {
    */
   getContext(): AudioContext {
     if (!this.context) {
-      throw new Error('AudioEngine not initialized. Call initialize() first.');
+      // Lazy init if possible (for backward compatibility if not called)
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      this.context = new AudioContextClass({ sampleRate: 44100 });
     }
     return this.context;
   }
 
-  /**
-   * 底鼓合成
-   */
+  // --- 鼓点合成算法 ---
+
   private createKickBuffer(ctx: AudioContext): AudioBuffer {
     const duration = 0.5;
     const frameCount = ctx.sampleRate * duration;
     const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
     const data = buffer.getChannelData(0);
-
-    const startFreq = 150;
-    const endFreq = 40;
+    const startFreq = 150, endFreq = 40;
     let phase = 0;
-
     for (let i = 0; i < frameCount; i++) {
       const t = i / ctx.sampleRate;
       const currentFreq = startFreq * Math.exp(-t * 20) + endFreq;
@@ -98,15 +113,11 @@ class AudioEngine {
     return buffer;
   }
 
-  /**
-   * 军鼓合成
-   */
   private createSnareBuffer(ctx: AudioContext): AudioBuffer {
     const duration = 0.15;
     const frameCount = ctx.sampleRate * duration;
     const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
     const data = buffer.getChannelData(0);
-
     for (let i = 0; i < frameCount; i++) {
       const t = i / ctx.sampleRate;
       const envelope = Math.exp(-t * 15);
@@ -117,15 +128,11 @@ class AudioEngine {
     return buffer;
   }
 
-  /**
-   * 踩镲合成
-   */
   private createHiHatBuffer(ctx: AudioContext, decay: number): AudioBuffer {
     const duration = 6.0 / decay;
     const frameCount = ctx.sampleRate * duration;
     const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
     const data = buffer.getChannelData(0);
-
     for (let i = 0; i < frameCount; i++) {
       const t = i / ctx.sampleRate;
       const envelope = Math.exp(-t * decay);
@@ -136,15 +143,11 @@ class AudioEngine {
     return buffer;
   }
 
-  /**
-   * 碎音合成
-   */
   private createCrashBuffer(ctx: AudioContext): AudioBuffer {
     const duration = 0.5;
     const frameCount = ctx.sampleRate * duration;
     const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
     const data = buffer.getChannelData(0);
-
     for (let i = 0; i < frameCount; i++) {
       const t = i / ctx.sampleRate;
       const envelope = Math.exp(-t * 3);
@@ -156,15 +159,11 @@ class AudioEngine {
     return buffer;
   }
 
-  /**
-   * 桶鼓合成
-   */
   private createTomBuffer(ctx: AudioContext): AudioBuffer {
     const duration = 0.25;
     const frameCount = ctx.sampleRate * duration;
     const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
     const data = buffer.getChannelData(0);
-
     const freq = 150;
     for (let i = 0; i < frameCount; i++) {
       const t = i / ctx.sampleRate;
@@ -174,15 +173,11 @@ class AudioEngine {
     return buffer;
   }
 
-  /**
-   * 叮叮镲合成
-   */
   private createRideBuffer(ctx: AudioContext): AudioBuffer {
     const duration = 0.4;
     const frameCount = ctx.sampleRate * duration;
     const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
     const data = buffer.getChannelData(0);
-
     for (let i = 0; i < frameCount; i++) {
       const t = i / ctx.sampleRate;
       const envelope = Math.exp(-t * 4);
@@ -193,48 +188,121 @@ class AudioEngine {
     return buffer;
   }
 
-  /**
-   * 播放鼓点
-   */
+  // --- 反馈音渲染 ---
+
+  private renderTone(ctx: OfflineAudioContext, freq: number, duration: number, type: OscillatorType): void {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, 0);
+    gain.gain.setValueAtTime(0.1, 0);
+    gain.gain.exponentialRampToValueAtTime(0.001, duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(0);
+    osc.stop(duration);
+  }
+
+  private renderExcellent(ctx: OfflineAudioContext): void {
+    const frequencies = [659.25, 783.99, 987.77, 1318.51];
+    frequencies.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const start = i * 0.03;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.15, start + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.5);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.6);
+    });
+  }
+
+  private renderGood(ctx: OfflineAudioContext): void {
+    const frequencies = [523.25, 659.25, 783.99];
+    frequencies.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const start = i * 0.04;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.1, start + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.5);
+    });
+  }
+
+  private renderBad(ctx: OfflineAudioContext): void {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(220, 0);
+    osc.frequency.exponentialRampToValueAtTime(180, 0.2);
+    gain.gain.setValueAtTime(0, 0);
+    gain.gain.linearRampToValueAtTime(0.08, 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.001, 0.3);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(0);
+    osc.stop(0.35);
+  }
+
+  private renderMiss(ctx: OfflineAudioContext): void {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(110, 0);
+    osc.frequency.exponentialRampToValueAtTime(80, 0.15);
+    gain.gain.setValueAtTime(0, 0);
+    gain.gain.linearRampToValueAtTime(0.06, 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, 0.25);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(0);
+    osc.stop(0.3);
+  }
+
+  // --- 播放接口 ---
+
+  playFeedback(name: 'excellent' | 'good' | 'bad' | 'miss' | 'beep_low' | 'beep_high'): void {
+    if (!this.context || this.context.state !== 'running') return;
+    const buffer = this.bufferCache.get(name);
+    if (buffer) {
+      const source = this.context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.context.destination);
+      source.start();
+    }
+  }
+
+  playExcellent(): void { this.playFeedback('excellent'); }
+  playGood(): void { this.playFeedback('good'); }
+  playBad(): void { this.playFeedback('bad'); }
+  playMiss(): void { this.playFeedback('miss'); }
+  playCountdown(isFinal: boolean = false): void { this.playFeedback(isFinal ? 'beep_high' : 'beep_low'); }
+
   playDrum(type: DrumType, volume: number = 0.5, timeOffset: number = 0): void {
     if (!this.context || this.context.state !== 'running') return;
-
-    const ctx = this.context;
-    let buffer = this.bufferCache.get(type);
-
-    if (!buffer) {
-      // 容错处理：如果缓存中没有，现场生成（通常不应发生）
-      switch (type) {
-        case 'kick': buffer = this.createKickBuffer(ctx); break;
-        case 'snare': buffer = this.createSnareBuffer(ctx); break;
-        case 'hihat': buffer = this.createHiHatBuffer(ctx, 20); break;
-        case 'openHihat': buffer = this.createHiHatBuffer(ctx, 5); break;
-        case 'crash': buffer = this.createCrashBuffer(ctx); break;
-        case 'tom': buffer = this.createTomBuffer(ctx); break;
-        case 'ride': buffer = this.createRideBuffer(ctx); break;
-        default: return;
-      }
-      this.bufferCache.set(type, buffer);
-    }
-
-    const now = ctx.currentTime + timeOffset;
-    const source = ctx.createBufferSource();
+    const buffer = this.bufferCache.get(type);
+    if (!buffer) return;
+    const now = this.context.currentTime + timeOffset;
+    const source = this.context.createBufferSource();
     source.buffer = buffer;
-
-    const gainNode = ctx.createGain();
+    const gainNode = this.context.createGain();
     gainNode.gain.value = volume;
-
     source.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
+    gainNode.connect(this.context.destination);
     source.start(now);
-    // 长衰减音色（如Crash）可能需要超过1秒，这里统一设置长一点的停止时间
     source.stop(now + 2.0);
   }
 
-  /**
-   * 播放节拍步骤
-   */
   playDrumStep(step: DrumStep | number, timeOffset: number = 0): void {
     if (typeof step === 'number') {
       const typeMap: DrumType[] = ['kick', 'hihat', 'snare', 'hihat'];
@@ -256,14 +324,12 @@ export function getAudioEngine(): AudioEngine {
 }
 
 /**
- * 以下导出用于向后兼容
+ * 向后兼容
  */
-export function playDrumStepCached(ctx: AudioContext, step: number | DrumStep): void {
-  const engine = getAudioEngine();
-  engine.playDrumStep(step);
+export function playDrumStep(step: DrumStep | number, timeOffset?: number): void {
+  getAudioEngine().playDrumStep(step, timeOffset || 0);
 }
 
-export function playDrumStep(step: DrumStep | number, timeOffset?: number): void {
-  const engine = getAudioEngine();
-  engine.playDrumStep(step, timeOffset || 0);
+export function playDrumStepCached(ctx: AudioContext, step: number | DrumStep): void {
+  getAudioEngine().playDrumStep(step);
 }

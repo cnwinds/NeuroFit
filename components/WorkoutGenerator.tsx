@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Difficulty, WorkoutPlan } from '../types';
 import { generateWorkoutPlanFromActions } from '../services/actionWorkoutGenerator';
+import { getAudioEngine } from '../beats/audioEngine';
 import { Zap, Clock, Activity, BrainCircuit, Rocket, Music, Sparkles } from 'lucide-react';
 
 interface Props {
@@ -20,6 +21,13 @@ const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor }
   const [statusText, setStatusText] = useState("准备生成计划...");
 
   const handleGenerate = async () => {
+    // 预热音频引擎：利用用户点击事件解锁 AudioContext
+    try {
+      await getAudioEngine().initialize();
+    } catch (e) {
+      console.warn("Audio pre-warm failed", e);
+    }
+
     setLoading(true);
     setProgress(0);
 
