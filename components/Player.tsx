@@ -38,6 +38,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
   const [cameraReady, setCameraReady] = useState(false);
   const [modelReady, setModelReady] = useState(false);
   const [showPerformance, setShowPerformance] = useState(false);
+  const [currentLandmarks, setCurrentLandmarks] = useState<any[]>([]);
 
   // --- Refs ---
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -192,6 +193,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           if (result.landmarks && result.landmarks[0]) {
             const landmarks = result.landmarks[0];
+            setCurrentLandmarks(landmarks);
             drawStickFigure(ctx, landmarks, canvas.width, canvas.height);
 
             const isDetecting = (state === PlayerState.PLAYING || state === PlayerState.INSTRUCTION);
@@ -400,6 +402,18 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
   return (
     <div className="fixed inset-0 flex flex-col bg-slate-900 overflow-hidden select-none">
       <div className={`absolute inset-0 transition-opacity duration-150 ${beatStep === 0 ? 'bg-teal-500/10' : 'bg-transparent'}`}></div>
+
+      {/* Action Specific Display Layer */}
+      {currentActionRef.current?.Display && (
+        <div className="absolute inset-0 z-0 mirror">
+          <currentActionRef.current.Display
+            landmarks={currentLandmarks}
+            accuracy={actionAccuracy}
+            beatStep={beatStep}
+          />
+        </div>
+      )}
+
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-contain mirror z-10 opactiy-90"></canvas>
 
       <div className="absolute inset-0 z-20 pointer-events-none">

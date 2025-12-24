@@ -5,6 +5,8 @@
 import { ActionComponent } from '../base/ActionBase';
 import { SayHiGuide } from './SayHiGuide';
 import { SayHiDetector } from './SayHiDetector';
+import { SayHiDisplay } from './SayHiDisplay';
+import { SayHiBeatGame } from './SayHiBeatGame';
 
 export const SayHiAction: ActionComponent = {
     name: '打招呼',
@@ -21,5 +23,5 @@ export const SayHiAction: ActionComponent = {
         ],
     },
     Detector: new SayHiDetector(),
-    Display: () => null,
+    Display: (props) => <SayHiBeatGame {...props} />,
 };
