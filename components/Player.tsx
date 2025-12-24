@@ -276,8 +276,8 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
     setFloatingScores(prev => [...prev, { id, x: 20 + Math.random() * 60, y: 30 + Math.random() * 20, value: score.toUpperCase() }]);
     setTimeout(() => setFloatingScores(prev => prev.filter(p => p.id !== id)), 1000);
 
-    if (beatIntervalRef.current) clearInterval(beatIntervalRef.current);
-    setState(PlayerState.CELEBRATION);
+    // Auto-clear the score display after a short while
+    setTimeout(() => setCurrentScore(null), 1000);
   }, [state, beatStep]);
 
   const startCountdown = () => {
@@ -297,9 +297,13 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
   }, [state, countdownValue]);
 
   const handleExerciseComplete = useCallback(() => {
+    clearInterval(timerRef.current);
     clearInterval(beatIntervalRef.current);
     getAudioEngine().playGood();
     setXp(v => v + 50);
+
+    // Trigger transition effect
+    setCurrentScore(ActionScore.EXCELLENT);
     setState(PlayerState.CELEBRATION);
   }, []);
 
@@ -485,7 +489,18 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
         {state === PlayerState.PAUSED && <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm"><Play className="w-16 h-16 text-white fill-white" /></div>}
       </div>
 
-      {state === PlayerState.CELEBRATION && currentScore && <CompletionEffect score={currentScore} onComplete={handleCompletionEffectComplete} />}
+      {currentScore && (
+        <CompletionEffect
+          score={currentScore}
+          onComplete={() => {
+            if (state === PlayerState.CELEBRATION) {
+              handleCompletionEffectComplete();
+            } else {
+              setCurrentScore(null);
+            }
+          }}
+        />
+      )}
 
       <div className="absolute bottom-36 right-4 z-40 w-24 md:w-32 aspect-[4/3] rounded-2xl overflow-hidden border border-white/20 bg-black shadow-2xl">
         <video ref={videoRef} className="w-full h-full object-cover mirror opacity-70" autoPlay playsInline muted></video>
