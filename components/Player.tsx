@@ -372,10 +372,40 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
         <div className="flex-1 w-full flex items-center justify-center my-6">
           <div className="relative w-full max-w-sm aspect-square bg-slate-800/50 backdrop-blur-md rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center">
             {currentActionRef.current ? (
-              <currentActionRef.current.Guide onReady={handleGuideReady} />
+              <currentActionRef.current.Guide onReady={handleGuideReady} landmarks={currentLandmarks} />
             ) : frames.length > 0 ? (
               <img src={frames[currentFrameIndex]} className="w-full h-full object-contain p-8" alt="guide" />
             ) : <Loader2 className="w-12 h-12 animate-spin text-teal-500" />}
+
+            {/* Debug Skeleton View Overlay */}
+            {currentLandmarks && currentLandmarks.length > 0 && (
+              <div
+                className="absolute bottom-4 right-4 w-24 h-32 bg-black/40 backdrop-blur-md rounded-xl border border-white/20 p-1 pointer-events-none"
+                style={{ transform: 'scaleX(-1)' }}
+              >
+                <svg viewBox="0 0 100 100" className="w-full h-full">
+                  {[[11, 12], [11, 23], [12, 24], [23, 24], [11, 13], [13, 15], [12, 14], [14, 16], [23, 25], [25, 27], [24, 26], [26, 28]].map(([i1, i2], idx) => {
+                    const s = currentLandmarks[i1];
+                    const e = currentLandmarks[i2];
+                    if (!s || !e) return null;
+                    return (
+                      <line
+                        key={idx}
+                        x1={s.x * 100} y1={s.y * 100}
+                        x2={e.x * 100} y2={e.y * 100}
+                        stroke="#2dd4bf"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                      />
+                    );
+                  })}
+                  {currentLandmarks[0] && (
+                    <circle cx={currentLandmarks[0].x * 100} cy={currentLandmarks[0].y * 100} r="5" fill="#ffffff" />
+                  )}
+                </svg>
+                <div className="absolute top-1 left-1 bg-black/60 px-1 rounded text-[6px] text-white font-mono uppercase tracking-tighter">DEBUG SKEL</div>
+              </div>
+            )}
           </div>
         </div>
         <div className="w-full pb-10 flex justify-center">

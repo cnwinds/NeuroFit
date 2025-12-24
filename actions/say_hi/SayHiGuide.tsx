@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { GuideProps } from '../base/ActionBase';
 
-export const SayHiGuide: React.FC<GuideProps> = ({ onReady }) => {
+export const SayHiGuide: React.FC<GuideProps> = ({ onReady, landmarks }) => {
     const [time, setTime] = useState(0);
     const requestRef = useRef<number | null>(null);
 
@@ -99,7 +99,6 @@ export const SayHiGuide: React.FC<GuideProps> = ({ onReady }) => {
                 <line x1={shoulder.x} y1={shoulder.y} x2={elbow.x} y2={elbow.y} {...lineProps} />
                 {/* Forearm */}
                 <line x1={elbow.x} y1={elbow.y} x2={wrist.x} y2={wrist.y} {...lineProps} />
-
             </svg>
         </div>
     );

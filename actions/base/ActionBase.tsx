@@ -12,6 +12,7 @@ import type { BeatPattern as NewBeatPattern, DrumStep } from '../../beats/types'
  */
 export interface GuideProps {
   onReady: () => void;
+  landmarks?: any[];
 }
 
 /**
