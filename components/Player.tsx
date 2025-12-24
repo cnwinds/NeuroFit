@@ -405,14 +405,13 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
           )}
         </div>
 
-        {/* Mini Camera Preview & Skeleton for Debugging (Bottom Right) */}
         <div className="absolute bottom-6 right-6 w-32 h-24 md:w-48 md:h-36 bg-black rounded-2xl overflow-hidden border border-white/20 shadow-2xl z-50">
-          <video ref={videoRef} className="w-full h-full object-cover mirror opacity-40" autoPlay playsInline muted></video>
-          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-contain mirror z-10 opactiy-90"></canvas>
+          <video ref={videoRef} className="w-full h-full object-cover opacity-40" autoPlay playsInline muted></video>
+          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-contain z-10 opactiy-90"></canvas>
 
           {/* User Skeleton Debug View Overlay */}
           {currentLandmarks && currentLandmarks.length > 0 ? (
-            <div className="absolute inset-0 mirror pointer-events-none">
+            <div className="absolute inset-0 pointer-events-none">
               <svg viewBox="0 0 100 100" className="w-full h-full">
                 {[[11, 12], [11, 23], [12, 24], [23, 24], [11, 13], [13, 15], [12, 14], [14, 16], [23, 25], [25, 27], [24, 26], [26, 28]].map(([i1, i2], idx) => {
                   const s = currentLandmarks[i1];
@@ -457,7 +456,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
 
       {/* Action Specific Display Layer */}
       {currentActionRef.current?.Display && (
-        <div className="absolute inset-0 z-0 mirror">
+        <div className="absolute inset-0 z-0">
           <currentActionRef.current.Display
             landmarks={currentLandmarks}
             accuracy={actionAccuracy}
@@ -466,7 +465,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
         </div>
       )}
 
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-contain mirror z-10 opactiy-90"></canvas>
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-contain z-10 opactiy-90"></canvas>
 
       <div className="absolute inset-0 z-20 pointer-events-none">
         {floatingScores.map(s => (
@@ -503,7 +502,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
       )}
 
       <div className="absolute bottom-36 right-4 z-40 w-24 md:w-32 aspect-[4/3] rounded-2xl overflow-hidden border border-white/20 bg-black shadow-2xl">
-        <video ref={videoRef} className="w-full h-full object-cover mirror opacity-70" autoPlay playsInline muted></video>
+        <video ref={videoRef} className="w-full h-full object-cover opacity-70" autoPlay playsInline muted></video>
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 z-30 px-6 pb-10 flex flex-col gap-4 bg-gradient-to-t from-slate-900 to-transparent pt-20">
