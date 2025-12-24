@@ -143,20 +143,17 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
     return () => { audioContextRef.current?.close(); };
   }, []);
 
-  useEffect(() => {
-    const initMediaPipeAndCamera = async () => {
-      try {
-        const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
-        poseLandmarkerRef.current = await PoseLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`,
-            delegate: "GPU"
-          },
-          runningMode: "VIDEO",
-          numPoses: 1
-        });
+  const [modelReady, setModelReady] = useState(false);
 
-        // 降低视频分辨率以减少CPU负担
+  // 稳定化的 onReady 回调，防止 Guide 组件的 useEffect 频繁重置导致动画卡顿
+  const handleGuideReady = useCallback(() => {
+    // 可以在这里处理加载完成逻辑
+  }, []);
+
+  useEffect(() => {
+    const initCamera = async () => {
+      try {
+        // 立即请求摄像头权限
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'user',
@@ -168,11 +165,31 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
         streamRef.current = stream;
         setCameraReady(true);
       } catch (error) {
-        console.error(error);
-        alert("请授予摄像头权限以进行 AI 动作识别。");
+        console.error("Camera access denied:", error);
+        alert("请授予摄像头权限以进行动作捕捉识别。");
       }
     };
-    initMediaPipeAndCamera();
+
+    const initMediaPipe = async () => {
+      try {
+        const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+        poseLandmarkerRef.current = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`,
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numPoses: 1
+        });
+        setModelReady(true);
+      } catch (error) {
+        console.error("MediaPipe initialization failed:", error);
+      }
+    };
+
+    // 并行启动：优先展示摄像头画面
+    initCamera();
+    initMediaPipe();
 
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
@@ -705,7 +722,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
 
             {currentActionRef.current ? (() => {
               const GuideComponent = currentActionRef.current!.Guide;
-              return <GuideComponent onReady={() => { }} />;
+              return <GuideComponent onReady={handleGuideReady} />;
             })() : frames.length > 0 ? (
               <img src={frames[currentFrameIndex]} className="w-full h-full object-contain p-8" alt="guide" />
             ) : <Loader2 className="w-12 h-12 animate-spin text-teal-500" />}
