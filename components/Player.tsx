@@ -31,6 +31,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
   const [frames, setFrames] = useState<string[]>([]);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [beatStep, setBeatStep] = useState(0);
+  const [beatProgress, setBeatProgress] = useState(0);
   const [xp, setXp] = useState(0);
   const [floatingScores, setFloatingScores] = useState<ScoreParticle[]>([]);
   const [currentScore, setCurrentScore] = useState<ActionScore | null>(null);
@@ -338,27 +339,67 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
 
   useEffect(() => { if (state === PlayerState.PLAYING && timeLeft === 0) handleExerciseComplete(); }, [timeLeft, state]);
 
-  // Rhythm Loop
+  // Rhythm Loop (Global Metronome)
   useEffect(() => {
-    if (state === PlayerState.PLAYING || state === PlayerState.INSTRUCTION) {
+    let isLooping = true;
+    const isRhythmActive = (state === PlayerState.PLAYING || state === PlayerState.INSTRUCTION);
+
+    if (isRhythmActive) {
       const engine = getAudioEngine();
       engine.initialize();
       const beat = currentActionRef.current?.Beat || { bpm: 120, pattern: [0, 1, 2, 3] };
-      const interval = (60 / beat.bpm) * 1000 / beat.pattern.length;
+      const bpm = beat.bpm;
+      const patternLength = beat.pattern.length;
+      const beatDuration = 60 / bpm; // seconds per beat
+      const stepDuration = beatDuration / (patternLength / 4); // assume pattern is 4 beats if patternLength is 4
+      // Simplified: one pattern item = one "step" in the engine
+      const totalStepDuration = 60 / bpm * (4 / patternLength);
 
-      beatIntervalRef.current = setInterval(() => {
-        setBeatStep(v => {
-          const next = (v + 1) % beat.pattern.length;
+      // More robust: ms per pattern step
+      const stepMs = (60 * 1000) / bpm / (patternLength / 4);
+      // Wait, usually pattern.length is 4 (for 4/4) or 8.
+      // If bpm is 60 and pattern is [0,1,2,3], then each step is 0.25s (15拍/分? No).
+      // Typically pattern.length 4 with 60 bpm means 1 step = 1 beat = 1s? 
+      // Let's assume pattern.length 4 for 1 bar (4 beats). 
+      // So interval = (60/bpm) * 1000.
+      const msPerStep = (60 * 1000) / bpm; // This would be one beat.
+
+      // Based on current implementation's interval calculation:
+      // const interval = (60 / beat.bpm) * 1000 / beat.pattern.length;
+      const intervalMs = (60 * 1000) / bpm / (patternLength / 4); // Actually the old code was interval = (60/bpm)*1000/pattern.length. 
+      // If bpm=60, pattern.len=4, interval=250ms. That means 4 steps = 1 beat. 16 steps per bar.
+
+      const startTime = performance.now();
+      let lastProcessedStep = -1;
+
+      const tick = () => {
+        if (!isLooping) return;
+        const elapsed = performance.now() - startTime;
+
+        // Calculate total progress in steps
+        const currentTotalSteps = elapsed / ((60 * 1000) / bpm / (patternLength / 4));
+        const currentStep = Math.floor(currentTotalSteps) % patternLength;
+        const currentProgress = currentTotalSteps % 1; // 0-1 within the step
+
+        setBeatStep(currentStep);
+        setBeatProgress(currentProgress);
+
+        if (currentStep !== lastProcessedStep) {
+          lastProcessedStep = currentStep;
           lastBeatTimeRef.current = Date.now();
-          const step = beat.pattern[next];
+          const step = beat.pattern[currentStep];
           if (Array.isArray(step)) step.forEach(s => engine.playDrumStep(s));
           else engine.playDrumStep(step);
-          return next;
-        });
-      }, interval);
+        }
+
+        requestAnimationFrame(tick);
+      };
+
+      requestAnimationFrame(tick);
     }
-    return () => clearInterval(beatIntervalRef.current);
-  }, [state]);
+
+    return () => { isLooping = false; };
+  }, [state, currentExerciseIndex]); // Re-run when exercise changes to reset rhythm if needed
 
   const togglePause = () => {
     if (state === PlayerState.PLAYING) setState(PlayerState.PAUSED);
@@ -391,7 +432,13 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
         <div className="flex-1 w-full flex items-center justify-center my-6">
           <div className="relative w-full max-w-sm aspect-square bg-slate-800/50 backdrop-blur-md rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center">
             {currentActionRef.current ? (
-              <currentActionRef.current.Guide onReady={handleGuideReady} landmarks={currentLandmarks} />
+              <currentActionRef.current.Guide
+                onReady={handleGuideReady}
+                landmarks={currentLandmarks}
+                beatStep={beatStep}
+                beatProgress={beatProgress}
+                bpm={currentActionRef.current.Beat.bpm}
+              />
             ) : frames.length > 0 ? (
               <img src={frames[currentFrameIndex]} className="w-full h-full object-contain p-8" alt="guide" />
             ) : <Loader2 className="w-12 h-12 animate-spin text-teal-500" />}
@@ -461,6 +508,8 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
             landmarks={currentLandmarks}
             accuracy={actionAccuracy}
             beatStep={beatStep}
+            beatProgress={beatProgress}
+            bpm={currentActionRef.current.Beat.bpm}
           />
         </div>
       )}

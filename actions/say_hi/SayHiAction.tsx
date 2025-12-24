@@ -16,10 +16,12 @@ export const SayHiAction: ActionComponent = {
     durationSeconds: 15,
     Guide: (props) => <SayHiGuide {...props} />,
     Beat: {
-        bpm: 80,
+        bpm: 60,
         pattern: [
-            { type: 'kick', volume: 0.8 },
-            { type: 'hihat', volume: 0.4 },
+            [{ type: 'kick', volume: 0.9 }],
+            [],
+            [{ type: 'tom', volume: 0.6 }, { type: 'hihat', volume: 0.6 }],
+            [],
         ],
     },
     Detector: new SayHiDetector(),

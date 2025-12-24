@@ -13,6 +13,9 @@ import type { BeatPattern as NewBeatPattern, DrumStep } from '../../beats/types'
 export interface GuideProps {
   onReady: () => void;
   landmarks?: any[];
+  beatStep: number;
+  beatProgress: number; // 0-1 within current step
+  bpm: number;
 }
 
 /**
@@ -22,6 +25,8 @@ export interface DisplayProps {
   landmarks: any[];
   accuracy: number;
   beatStep: number;
+  beatProgress: number; // 0-1 within current step
+  bpm: number;
 }
 
 /**

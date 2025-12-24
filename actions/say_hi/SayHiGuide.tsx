@@ -1,26 +1,21 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { GuideProps } from '../base/ActionBase';
 
-export const SayHiGuide: React.FC<GuideProps> = ({ onReady, landmarks }) => {
-    const [time, setTime] = useState(0);
-    const requestRef = useRef<number | null>(null);
+export const SayHiGuide: React.FC<GuideProps> = ({ onReady, landmarks, beatStep, beatProgress }) => {
 
     useEffect(() => {
         onReady();
-        const animate = (t: number) => {
-            setTime(t / 1000); // 转换为秒
-            requestRef.current = requestAnimationFrame(animate);
-        };
-        requestRef.current = requestAnimationFrame(animate);
-        return () => {
-            if (requestRef.current) cancelAnimationFrame(requestRef.current);
-        };
     }, [onReady]);
 
     // --- Stick Figure Geometry Definition ---
 
-    // 使用正弦波计算挥手角度 (在 -20 到 -80 度之间波动，0度是水平向右)
-    const waveAngle = -50 + Math.sin(time * 6) * 30;
+    // 使用全局节拍进度计算动画，确保永不同步偏移
+    // globalStepProgress 在 4/4 拍中范围是 0 到 4
+    const globalStepProgress = beatStep + beatProgress;
+
+    // 我们让摆动周期与 2 拍同步（一拍往，一拍返）
+    // Math.sin 的周期是 2PI，所以除以 2 拍后再乘 2PI
+    const waveAngle = -50 + Math.sin((globalStepProgress / 2) * Math.PI * 2) * 30;
     const radian = (waveAngle * Math.PI) / 180;
 
     // Static Body Parts
@@ -45,7 +40,7 @@ export const SayHiGuide: React.FC<GuideProps> = ({ onReady, landmarks }) => {
 
     // 大臂：从肩部出发
     // 我们让大臂相对固定，小臂挥动比较大
-    const upperArmAngle = -30 + Math.sin(time * 6) * 10;
+    const upperArmAngle = -30 + Math.sin((globalStepProgress / 2) * Math.PI * 2) * 10;
     const upperArmRad = (upperArmAngle * Math.PI) / 180;
     const elbow = {
         x: shoulder.x + upperArmLength * Math.cos(upperArmRad),
@@ -103,4 +98,3 @@ export const SayHiGuide: React.FC<GuideProps> = ({ onReady, landmarks }) => {
         </div>
     );
 };
-

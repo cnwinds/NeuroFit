@@ -4,7 +4,7 @@ import { DisplayProps } from '../base/ActionBase';
 interface Note {
     id: number;
     progress: number; // 0 to 1
-    startTime: number;
+    spawnStep: number;
 }
 
 interface Particle {
@@ -17,7 +17,7 @@ interface Particle {
     color: string;
 }
 
-export const SayHiBeatGame: React.FC<DisplayProps> = ({ landmarks, accuracy, beatStep }) => {
+export const SayHiBeatGame: React.FC<DisplayProps> = ({ landmarks, accuracy, beatStep, beatProgress, bpm }) => {
     const [notes, setNotes] = useState<Note[]>([]);
     const [particles, setParticles] = useState<Particle[]>([]);
     const lastBeatStepRef = useRef<number>(-1);
@@ -37,7 +37,7 @@ export const SayHiBeatGame: React.FC<DisplayProps> = ({ landmarks, accuracy, bea
             const newNote: Note = {
                 id: Math.random(),
                 progress: 0,
-                startTime: Date.now()
+                spawnStep: beatStep
             };
             setNotes(prev => [...prev, newNote]);
             lastBeatStepRef.current = beatStep;
@@ -50,9 +50,6 @@ export const SayHiBeatGame: React.FC<DisplayProps> = ({ landmarks, accuracy, bea
             // 触发击中粒子效果
             spawnParticles(targetPos.x, targetPos.y, '#2dd4bf');
             setCombo(c => c + 1);
-        } else if (accuracy < 0.2 && lastAccuracyRef.current >= 0.2) {
-            // 误触或动作不到位不重置，但如果长时间没动作可以考虑重置
-            // 这里暂不处理重置，保持积极反馈
         }
         lastAccuracyRef.current = accuracy;
     }, [accuracy]);
@@ -71,15 +68,6 @@ export const SayHiBeatGame: React.FC<DisplayProps> = ({ landmarks, accuracy, bea
     };
 
     const animate = () => {
-        // 更新音符
-        setNotes(prev => prev
-            .map(note => ({
-                ...note,
-                progress: note.progress + 0.012 // 稍微慢一点，更有节奏感
-            }))
-            .filter(note => note.progress < 1.1)
-        );
-
         // 更新粒子
         setParticles(prev => prev
             .map(p => ({
@@ -93,6 +81,24 @@ export const SayHiBeatGame: React.FC<DisplayProps> = ({ landmarks, accuracy, bea
 
         requestRef.current = requestAnimationFrame(animate);
     };
+
+    // 音符进度现在根据全局的 beatProgress 更新，确保永远不漂移
+    useEffect(() => {
+        setNotes(prev => prev
+            .map(note => {
+                // 计算音符从生成到现在的步数差
+                // 假设音符飞过 1 个 beatStep 的距离 (即 progress 从 0 到 1 需要 1 个 step)
+                let ageInSteps = beatStep - note.spawnStep;
+                if (ageInSteps < 0) ageInSteps += 4; // 假设 pattern 长度为 4
+
+                return {
+                    ...note,
+                    progress: ageInSteps + beatProgress
+                };
+            })
+            .filter(note => note.progress < 1.2) // 稍微多留一点余地让击中动画显眼
+        );
+    }, [beatStep, beatProgress]);
 
     useEffect(() => {
         requestRef.current = requestAnimationFrame(animate);
