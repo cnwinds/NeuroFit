@@ -156,9 +156,27 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
     if (isVidActive && videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current;
       videoRef.current.play().catch(console.error);
-      if (poseLandmarkerRef.current) predictWebcam();
     }
   }, [state, cameraReady]);
+
+  useEffect(() => {
+    let isLooping = true;
+    const loop = () => {
+      if (!isLooping) return;
+      predictWebcam();
+      requestRef.current = requestAnimationFrame(loop);
+    };
+
+    const isVidActive = (state === PlayerState.COUNTDOWN || state === PlayerState.PLAYING || state === PlayerState.INSTRUCTION);
+    if (isVidActive && cameraReady && modelReady) {
+      loop();
+    }
+
+    return () => {
+      isLooping = false;
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    };
+  }, [state, cameraReady, modelReady]);
 
   // --- Detection Logic ---
 
@@ -166,13 +184,13 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
     const landmarker = poseLandmarkerRef.current;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!landmarker || !video || !canvas) return;
+    if (!landmarker || !video || !canvas || video.readyState < 2) return;
+
+    if (video.currentTime === lastVideoTimeRef.current) return;
+    lastVideoTimeRef.current = video.currentTime;
 
     const ctx = canvas.getContext("2d");
-    if (!ctx || video.videoWidth === 0) {
-      requestRef.current = requestAnimationFrame(predictWebcam);
-      return;
-    }
+    if (!ctx || video.videoWidth === 0) return;
 
     if (canvas.width !== video.videoWidth) {
       canvas.width = video.videoWidth;
@@ -189,35 +207,32 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
       lastDetectionTime.current = now;
 
       landmarker.detectForVideo(video, now, (result) => {
-        requestAnimationFrame(() => {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          if (result.landmarks && result.landmarks[0]) {
-            const landmarks = result.landmarks[0];
-            setCurrentLandmarks(landmarks);
-            drawStickFigure(ctx, landmarks, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (result.landmarks && result.landmarks[0]) {
+          const landmarks = result.landmarks[0];
+          setCurrentLandmarks(landmarks);
+          drawStickFigure(ctx, landmarks, canvas.width, canvas.height);
 
-            const isDetecting = (state === PlayerState.PLAYING || state === PlayerState.INSTRUCTION);
-            if (currentActionRef.current && isDetecting) {
-              const res = currentActionRef.current.Detector.detect(landmarks, previousLandmarksRef.current);
+          const isDetecting = (state === PlayerState.PLAYING || state === PlayerState.INSTRUCTION);
+          if (currentActionRef.current && isDetecting) {
+            const res = currentActionRef.current.Detector.detect(landmarks, previousLandmarksRef.current);
 
-              if (state === PlayerState.PLAYING) setActionAccuracy(res.accuracy);
+            if (state === PlayerState.PLAYING) setActionAccuracy(res.accuracy);
 
-              if (res.isCompleted) {
-                if (state === PlayerState.PLAYING) {
-                  handleActionComplete(res.accuracy);
-                } else if (state === PlayerState.INSTRUCTION) {
-                  instructionSuccessCount.current++;
-                  getAudioEngine().playGood();
-                  if (instructionSuccessCount.current >= 2) startCountdown();
-                }
+            if (res.isCompleted) {
+              if (state === PlayerState.PLAYING) {
+                handleActionComplete(res.accuracy);
+              } else if (state === PlayerState.INSTRUCTION) {
+                instructionSuccessCount.current++;
+                getAudioEngine().playGood();
+                if (instructionSuccessCount.current >= 1) startCountdown(); // Reduced to 1 for faster mobile testing/onboarding
               }
-              previousLandmarksRef.current = landmarks;
             }
+            previousLandmarksRef.current = landmarks;
           }
-        });
+        }
       });
     }
-    requestRef.current = requestAnimationFrame(predictWebcam);
   };
 
   const drawStickFigure = (ctx: CanvasRenderingContext2D, landmarks: any[], w: number, h: number) => {
