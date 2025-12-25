@@ -73,10 +73,10 @@ const Metronome: React.FC<MetronomeProps> = ({
     const patternLength = Math.max(patternSteps.length, 1);
     const swing = pattern.swing || 0;
 
-    // 基础节拍间隔（毫秒）
-    const baseIntervalMs = (60 / pattern.bpm) * 1000;
-    // 默认为 16 分音符（每拍 4 个步骤）
-    const stepIntervalMs = baseIntervalMs / 4;
+    // BPM = 每分钟拍数
+    // 一拍 = patternLength 个 step
+    // 每步时长 = (60 / BPM) / patternLength 秒
+    const stepIntervalMs = ((60 / pattern.bpm) * 1000) / patternLength;
 
     // 重置状态
     setCurrentStep(0);
