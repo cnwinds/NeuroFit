@@ -444,10 +444,10 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
   }, [pattern]);
 
   return (
-    <div className="fixed inset-0 h-[100dvh] z-50 bg-[#020617] text-white flex flex-col font-sans overflow-hidden selection:bg-teal-500/30">
+    <div className="fixed inset-0 h-[100dvh] z-50 bg-[#020617] text-white flex flex-col font-sans overflow-hidden selection:bg-teal-500/30 max-h-[100dvh]">
 
       {/* 1. 净化后的标题栏 */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 bg-[#020617]/80 backdrop-blur-2xl z-50">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 bg-[#020617]/80 backdrop-blur-2xl z-50 shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-1 h-5 bg-teal-500 rounded-full shadow-[0_0_15px_rgba(20,184,166,0.5)]" />
           <h1 className="text-xl font-[900] italic uppercase tracking-[-0.05em] text-white/90">
@@ -463,7 +463,7 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
       </div>
 
       {/* 2. 增强版仪表盘 - 压缩间距 */}
-      <div className="px-4 py-2 bg-gradient-to-b from-[#020617] to-slate-900/40 border-b border-white/5 flex flex-col gap-2">
+      <div className="px-4 py-2 bg-gradient-to-b from-[#020617] to-slate-900/40 border-b border-white/5 flex flex-col gap-2 shrink-0">
 
         <div className="flex flex-col sm:flex-row items-center gap-2">
           {/* 播放与全局节拍指示 */}
@@ -516,7 +516,7 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
 
       {/* 3. 沉浸式网格编辑区 - 紧凑化布局 */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-[#020617]">
-        <div className="flex-1 flex flex-col p-2 sm:p-4 relative">
+        <div className="flex-1 flex flex-col p-2 sm:p-4 relative min-h-0 overflow-y-auto">
 
           {/* 网格核心容器 - 减小圆角 */}
           <div className="flex-1 border border-white/10 rounded-xl overflow-hidden bg-slate-900/30 backdrop-blur-sm shadow-xl flex flex-col">
@@ -616,12 +616,12 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
         </div>
 
         {/* 4. 底栏操作 - 极致紧凑 Grid */}
-        <div className="shrink-0 px-3 py-2 border-t border-white/10 bg-[#020617]/95 backdrop-blur-2xl pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 px-2 sm:px-3 py-1.5 sm:py-2 border-t border-white/10 bg-[#020617]/95 backdrop-blur-2xl pb-[max(0.5rem,env(safe-area-inset-bottom))] z-40">
           <div className="max-w-7xl mx-auto">
-            <div className="grid grid-cols-1 sm:flex sm:items-center sm:justify-between gap-2">
+            <div className="grid grid-cols-1 sm:flex sm:items-center sm:justify-between gap-1.5 sm:gap-2">
 
               {/* 参数区 (左/上) */}
-              <div className="flex items-center justify-between sm:justify-start gap-3 bg-white/5 p-1.5 rounded-lg border border-white/5">
+              <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 bg-white/5 p-1 sm:p-1.5 rounded-lg border border-white/5">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[6px] font-black uppercase tracking-tighter text-white/20">Length</span>
                   <select
@@ -661,7 +661,7 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
               </div>
 
               {/* 操作区 (右/下) */}
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 sm:gap-1.5">
                 <button
                   onClick={handleClear}
                   className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-2.5 py-2 bg-white/5 hover:bg-red-500/10 rounded-lg border border-white/5 text-white/40 hover:text-red-400 transition-colors"
