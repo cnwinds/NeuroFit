@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 import fs from 'fs';
 import path from 'path';
 
@@ -7,6 +8,70 @@ import path from 'path';
 export default defineConfig({
   plugins: [
     react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: 'auto',
+      includeAssets: ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'maskable-icon-512.png'],
+      manifest: {
+        name: 'NeuroFit Pulsar',
+        short_name: 'NeuroFit',
+        description: 'AI-Powered Pulsating Fitness Experience',
+        theme_color: '#0f172a',
+        background_color: '#0f172a',
+        display: 'standalone',
+        icons: [
+          {
+            src: 'icon-192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'icon-512.png',
+            sizes: '512x512',
+            type: 'image/png'
+          },
+          {
+            src: 'maskable-icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
+          }
+        ]
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/storage\.googleapis\.com\/mediapipe-models\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'mediapipe-models',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/@mediapipe\/tasks-vision\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'mediapipe-assets',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          }
+        ]
+      }
+    }),
     {
       name: 'action-saver',
       configureServer(server) {
@@ -45,9 +110,8 @@ export default defineConfig({
       }
     }
   ],
-  base: './', // Ensures assets are loaded correctly on GitHub Pages sub-paths
+  base: './',
   define: {
-    // This allows process.env.API_KEY to be used in the source code
     'process.env.API_KEY': JSON.stringify(process.env.API_KEY || '')
   },
   build: {
