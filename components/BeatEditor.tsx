@@ -44,6 +44,26 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
 
+  // 新增：移动端优化状态
+  const [currentPage, setCurrentPage] = useState(0);
+  const [soloDrum, setSoloDrum] = useState<DrumType | null>(null);
+  const currentPageRef = useRef(0);
+
+  // 同步 Ref 以便在回调中使用
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
+
+  // 新增：稳定的回调处理，防止 Metronome 频繁重启
+  const handleBeatStepChange = useCallback((step: number) => {
+    setCurrentStep(step);
+    // 播放时自动切换页面 (4步一页)
+    const targetPage = Math.floor(step / 4);
+    if (targetPage !== currentPageRef.current) {
+      setCurrentPage(targetPage);
+    }
+  }, []);
+
   // 加载保存的列表
   useEffect(() => {
     try {
@@ -195,16 +215,20 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
     for (let i = 0; i < patternLength; i++) {
       // 如果 pattern 中有对应步骤，使用它
       if (i < pattern.length && pattern[i] !== undefined && pattern[i] !== null) {
-        const step = pattern[i];
-        // 检查是否是数组（新格式）或单个对象（旧格式兼容）
-        if (Array.isArray(step)) {
-          patternArray[i] = step;
+        let step = pattern[i];
+
+        // 如果不是数组，转换为数组（旧格式兼容）
+        if (!Array.isArray(step)) {
+          step = [step];
+        }
+
+        // 重要：如果开启了 Solo 模式，则仅过滤出该乐器的发声
+        if (soloDrum) {
+          patternArray[i] = step.filter(d => d.type === soloDrum);
         } else {
-          // 旧格式：单个 DrumStep，转换为数组
-          patternArray[i] = [step];
+          patternArray[i] = step;
         }
       } else {
-        // 默认空数组（无乐器）
         patternArray[i] = [];
       }
     }
@@ -420,203 +444,246 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
   }, [pattern]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900 text-white flex flex-col">
-      {/* 顶部控制栏 */}
-      <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-slate-800/50">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
-            aria-label="关闭"
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <h1 className="text-xl font-bold">节拍编辑器</h1>
-        </div>
+    <div className="fixed inset-0 h-[100dvh] z-50 bg-[#020617] text-white flex flex-col font-sans overflow-hidden selection:bg-teal-500/30">
 
-        <div className="flex items-center gap-4">
-          {/* BPM 控制 */}
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-slate-400">BPM:</label>
-            <input
-              type="range"
-              min="60"
-              max="200"
-              value={bpm}
-              onChange={(e) => setBpm(Number(e.target.value))}
-              className="w-32"
+      {/* 1. 净化后的标题栏 */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 bg-[#020617]/80 backdrop-blur-2xl z-50">
+        <div className="flex items-center gap-2.5">
+          <div className="w-1 h-5 bg-teal-500 rounded-full shadow-[0_0_15px_rgba(20,184,166,0.5)]" />
+          <h1 className="text-xl font-[900] italic uppercase tracking-[-0.05em] text-white/90">
+            Beat <span className="text-teal-500">Editor</span>
+          </h1>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all group active:scale-90"
+        >
+          <X className="w-4 h-4 text-white/40 group-hover:text-white transition-colors" />
+        </button>
+      </div>
+
+      {/* 2. 增强版仪表盘 - 压缩间距 */}
+      <div className="px-4 py-2 bg-gradient-to-b from-[#020617] to-slate-900/40 border-b border-white/5 flex flex-col gap-2">
+
+        <div className="flex flex-col sm:flex-row items-center gap-2">
+          {/* 播放与全局节拍指示 */}
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            <Metronome
+              pattern={useMemo(() => buildBeatPattern(), [buildBeatPattern])}
+              isPlaying={isPlaying}
+              onPlayStateChange={setIsPlaying}
+              onBeatStepChange={handleBeatStepChange}
             />
-            <span className="text-sm font-mono w-12">{bpm}</span>
+
+            <div className="h-6 w-px bg-white/10 hidden sm:block" />
+
+            {/* BPM 仪表板 */}
+            <div className="flex-1 sm:flex-none flex flex-col gap-0.5 min-w-[100px]">
+              <div className="flex justify-between items-end">
+                <span className="text-[8px] font-black uppercase tracking-widest text-teal-500/50 leading-none">Tempo</span>
+                <span className="text-base font-black italic text-teal-400 tabular-nums leading-none tracking-tighter">{bpm} <small className="text-[8px] opacity-40">BPM</small></span>
+              </div>
+              <input
+                type="range" min="60" max="200" value={bpm}
+                onChange={(e) => setBpm(Number(e.target.value))}
+                className="w-full sm:w-36 accent-teal-500 h-1 bg-white/10 rounded-full appearance-none cursor-pointer"
+              />
+            </div>
           </div>
 
-          {/* 节拍器控制 */}
-          <Metronome
-            pattern={useMemo(() => buildBeatPattern(), [buildBeatPattern])}
-            isPlaying={isPlaying}
-            onPlayStateChange={setIsPlaying}
-            onBeatStepChange={setCurrentStep}
-          />
+          {/* 分页控制器 - 减小圆角 */}
+          <div className="flex items-center gap-1 p-0.5 bg-white/5 rounded-lg border border-white/5 w-full sm:w-auto overflow-x-auto no-scrollbar">
+            {Array.from({ length: Math.ceil(patternLength / 4) }).map((_, idx) => {
+              const isCurrentPage = currentPage === idx;
+              const hasActiveInPage = isPlaying && Math.floor(currentStep / 4) === idx;
+
+              return (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentPage(idx)}
+                  className={`flex-1 sm:flex-none px-2 py-1.5 rounded-md text-[8px] font-black uppercase transition-all whitespace-nowrap ${isCurrentPage
+                    ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/10'
+                    : 'bg-white/5 text-white/30 hover:bg-white/10'
+                    } ${hasActiveInPage ? 'ring-2 ring-teal-400 ring-offset-1 ring-offset-[#020617]' : ''}`}
+                >
+                  Page {idx + 1}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* 主编辑区 */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* 3. 沉浸式网格编辑区 - 紧凑化布局 */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-[#020617]">
+        <div className="flex-1 flex flex-col p-2 sm:p-4 relative">
 
-        {/* 步进序列器网格 */}
-        <div className="flex-1 overflow-auto p-6">
-          <div className="max-w-6xl mx-auto">
-            {/* 网格容器 */}
-            <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-4">
-              {/* 音色列表和网格 */}
-              <div className="space-y-2">
-                {DRUM_TYPES.map((drum) => (
-                  <div key={drum.type} className="flex items-center gap-2">
-                    {/* 音色标签 */}
-                    <div className="w-24 flex items-center gap-2">
+          {/* 网格核心容器 - 减小圆角 */}
+          <div className="flex-1 border border-white/10 rounded-xl overflow-hidden bg-slate-900/30 backdrop-blur-sm shadow-xl flex flex-col">
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              {DRUM_TYPES.map((drum) => {
+                const isSolo = soloDrum === drum.type;
+                const anySolo = soloDrum !== null;
+                const isDisabled = anySolo && !isSolo;
+
+                return (
+                  <div
+                    key={drum.type}
+                    className={`flex border-b border-white/5 last:border-0 transition-opacity duration-300 ${isDisabled ? 'opacity-30' : 'opacity-100'}`}
+                  >
+                    {/* 左侧固定：Solo 切换器 - 减小内边距 */}
+                    <div className="w-20 sm:w-28 bg-[#0f172a]/95 backdrop-blur-2xl px-2 py-1.5 sm:px-3 sm:py-2 border-r border-white/10 flex items-center shrink-0 sticky left-0 z-20">
                       <button
                         onClick={() => {
+                          setSoloDrum(isSolo ? null : drum.type);
                           setSelectedDrumType(drum.type);
                           playDrumPreview(drum.type);
                         }}
-                        className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${selectedDrumType === drum.type
-                          ? `${drum.color} text-white shadow-lg`
-                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                        className={`w-full py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all relative overflow-hidden group border ${isSolo
+                          ? `${drum.color} text-white border-white/20 shadow-lg shadow-teal-500/10`
+                          : 'bg-white/5 text-white/30 border-transparent hover:bg-white/10'
                           }`}
                       >
-                        {drum.label}
+                        <div className="relative z-10 flex flex-col items-center">
+                          <span>{drum.label}</span>
+                          {isSolo && <span className="text-[6px] italic opacity-60 leading-none mt-0.5">SOLO</span>}
+                        </div>
                       </button>
                     </div>
 
-                    {/* 网格行 */}
-                    <div className="flex-1 flex gap-1">
-                      {Array(patternLength).fill(null).map((_, stepIndex) => {
+                    {/* 右侧：当页步进 - 减小间距与圆角 */}
+                    <div className="flex-1 flex p-1.5 sm:p-3 gap-1.5 sm:gap-3 items-center">
+                      {Array.from({ length: 4 }).map((_, i) => {
+                        const stepIndex = currentPage * 4 + i;
                         const isActive = isCellActive(stepIndex, drum.type);
                         const isCurrentStep = isPlaying && currentStep === stepIndex;
+                        const isMajorBeat = stepIndex % 4 === 0;
 
                         return (
                           <button
                             key={stepIndex}
                             onClick={() => handleCellClick(stepIndex, drum.type)}
-                            className={`flex-1 aspect-square rounded-lg transition-all ${isActive
-                              ? `${drum.color} shadow-lg scale-105`
-                              : 'bg-slate-700 hover:bg-slate-600'
-                              } ${isCurrentStep && isActive
-                                ? 'ring-2 ring-teal-400 ring-offset-2 ring-offset-slate-800'
-                                : ''
-                              } ${isCurrentStep && !isActive
-                                ? 'ring-1 ring-teal-500/50'
-                                : ''
+                            disabled={stepIndex >= patternLength}
+                            className={`flex-1 aspect-square sm:aspect-video sm:h-14 rounded-lg transition-all relative group/step ${stepIndex >= patternLength ? 'opacity-0 pointer-events-none' : ''
+                              } ${isActive
+                                ? `${drum.color} shadow-lg shadow-teal-500/20 z-10`
+                                : isMajorBeat ? 'bg-white/10 hover:bg-white/15' : 'bg-white/[0.04] hover:bg-white/10'
                               }`}
-                            title={`步骤 ${stepIndex + 1}`}
-                          />
+                          >
+                            {/* 强拍标记 */}
+                            {isMajorBeat && !isActive && (
+                              <div className="absolute top-1 left-1 w-1 h-1 bg-white/20 rounded-full" />
+                            )}
+
+                            {/* 播放头扫描线 - 紧凑型 */}
+                            {isCurrentStep && (
+                              <div className={`absolute inset-0 rounded-lg border-2 border-teal-400 ${isActive ? 'bg-white/20' : 'bg-teal-500/20'}`}>
+                                <div className="absolute inset-0 bg-teal-500/5 blur-md rounded-lg -z-10" />
+                              </div>
+                            )}
+                          </button>
                         );
                       })}
                     </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
+            </div>
 
-              {/* 步骤编号 */}
-              <div className="flex gap-1 mt-2 ml-24">
-                {Array(patternLength).fill(null).map((_, index) => (
-                  <div
-                    key={index}
-                    className={`flex-1 text-center text-xs font-mono ${isPlaying && currentStep === index
-                      ? 'text-teal-400 font-bold'
-                      : 'text-slate-500'
-                      }`}
-                  >
-                    {index + 1}
-                  </div>
-                ))}
+            {/* 底部播放头提示 - 压缩高度 */}
+            <div className="flex border-t border-white/10 bg-black/40 p-1.5 sm:p-2">
+              <div className="w-20 sm:w-28 border-r border-white/10 flex items-center justify-center">
+                <span className="text-[7px] font-black uppercase text-teal-500/20 tracking-[0.2em]">Timeline</span>
+              </div>
+              <div className="flex-1 flex gap-1.5 sm:gap-3 px-1.5 sm:px-3">
+                {Array.from({ length: 4 }).map((_, i) => {
+                  const stepIndex = currentPage * 4 + i;
+                  const isCurrentStep = isPlaying && currentStep === stepIndex;
+                  return (
+                    <div
+                      key={stepIndex}
+                      className={`flex-1 text-center text-[9px] font-black italic ${isCurrentStep ? 'text-teal-400' : 'text-white/10'
+                        }`}
+                    >
+                      {stepIndex < patternLength ? String(stepIndex + 1).padStart(2, '0') : '--'}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
         </div>
 
-        {/* 底部控制栏 */}
-        <div className="p-4 border-t border-slate-700 bg-slate-800/50">
-          <div className="max-w-6xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              {/* 模式长度 */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-slate-400">长度:</label>
-                <select
-                  value={patternLength}
-                  onChange={(e) => {
-                    const newLength = Number(e.target.value);
-                    setPatternLength(newLength);
-                    // 调整当前模式长度
-                    setPattern(prev => {
-                      const newPattern = [...prev];
-                      while (newPattern.length < newLength) {
-                        newPattern.push([]); // 空数组（无乐器）
-                      }
-                      while (newPattern.length > newLength) {
-                        newPattern.pop();
-                      }
-                      return newPattern;
-                    });
-                  }}
-                  className="px-3 py-1 bg-slate-700 border border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+        {/* 4. 底栏操作 - 极致紧凑 Grid */}
+        <div className="shrink-0 px-3 py-2 border-t border-white/10 bg-[#020617]/95 backdrop-blur-2xl pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 sm:flex sm:items-center sm:justify-between gap-2">
+
+              {/* 参数区 (左/上) */}
+              <div className="flex items-center justify-between sm:justify-start gap-3 bg-white/5 p-1.5 rounded-lg border border-white/5">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[6px] font-black uppercase tracking-tighter text-white/20">Length</span>
+                  <select
+                    value={patternLength}
+                    onChange={(e) => {
+                      const newLength = Number(e.target.value);
+                      setPatternLength(newLength);
+                      setPattern(prev => {
+                        const newPattern = [...prev];
+                        while (newPattern.length < newLength) newPattern.push([]);
+                        while (newPattern.length > newLength) newPattern.pop();
+                        return newPattern;
+                      });
+                      setCurrentPage(0);
+                    }}
+                    className="bg-transparent text-[9px] font-black text-teal-400 focus:outline-none appearance-none cursor-pointer"
+                  >
+                    {[4, 8, 12, 16, 24, 32].map(len => (
+                      <option key={len} value={len} className="bg-[#0f172a] text-white">{len} STEPS</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="h-5 w-px bg-white/10" />
+
+                <div className="flex flex-col gap-0.5 flex-1 max-w-[100px]">
+                  <div className="flex justify-between items-center pr-1">
+                    <span className="text-[6px] font-black uppercase tracking-tighter text-white/20">Swing</span>
+                    <span className="text-[8px] font-black italic tabular-nums text-teal-400">{swing}%</span>
+                  </div>
+                  <input
+                    type="range" min="0" max="100" value={swing}
+                    onChange={(e) => setSwing(Number(e.target.value))}
+                    className="w-full accent-teal-500 h-0.5 bg-white/10 rounded-full appearance-none cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* 操作区 (右/下) */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleClear}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-2.5 py-2 bg-white/5 hover:bg-red-500/10 rounded-lg border border-white/5 text-white/40 hover:text-red-400 transition-colors"
                 >
-                  {[4, 8, 12, 16, 24, 32].map(len => (
-                    <option key={len} value={len}>{len} 步</option>
-                  ))}
-                </select>
+                  <Trash2 className="w-3 h-3" />
+                  <span className="text-[8px] font-black uppercase tracking-widest leading-none">Clear</span>
+                </button>
+                <button
+                  onClick={() => setShowLoadModal(true)}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-2.5 py-2 bg-blue-500/5 text-blue-400/60 hover:text-blue-400 border border-blue-500/10 rounded-lg transition-colors"
+                >
+                  <Upload className="w-3 h-3" />
+                  <span className="text-[8px] font-black uppercase tracking-widest leading-none">Load</span>
+                </button>
+                <button
+                  onClick={() => setShowSaveModal(true)}
+                  className="flex-[2] sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-teal-500 text-white font-black rounded-lg transition-all hover:bg-teal-400 active:scale-95 shadow-lg shadow-teal-500/20"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span className="text-[9px] font-black uppercase tracking-widest leading-none">STORE</span>
+                </button>
               </div>
-
-              {/* 摇摆感 */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-slate-400">摇摆:</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={swing}
-                  onChange={(e) => setSwing(Number(e.target.value))}
-                  className="w-24"
-                />
-                <span className="text-sm font-mono w-12">{swing}%</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleClear}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                清空
-              </button>
-              <button
-                onClick={handleReset}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
-              >
-                <RotateCcw className="w-4 h-4" />
-                重置
-              </button>
-              <button
-                onClick={() => setShowLoadModal(true)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
-              >
-                <Upload className="w-4 h-4" />
-                加载
-              </button>
-              <button
-                onClick={handleExport}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                导出
-              </button>
-              <button
-                onClick={() => setShowSaveModal(true)}
-                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                保存
-              </button>
             </div>
           </div>
         </div>
@@ -624,7 +691,7 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
 
       {/* Save Modal */}
       {showSaveModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 text-white">
           <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md shadow-2xl animate-fade-in">
             <h3 className="text-xl font-bold mb-4">保存节拍模式</h3>
             <input
@@ -638,13 +705,13 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowSaveModal(false)}
-                className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+                className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
               >
                 取消
               </button>
               <button
                 onClick={confirmSave}
-                className="px-6 py-2 bg-teal-500 hover:bg-teal-600 text-white font-bold rounded-lg transition-colors"
+                className="px-6 py-2 bg-teal-500 hover:bg-teal-600 text-white font-bold rounded-lg transition-colors text-sm"
                 disabled={!patternName.trim()}
               >
                 确认保存
@@ -656,16 +723,18 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
 
       {/* Load Modal */}
       {showLoadModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 text-white">
           <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-2xl shadow-2xl max-h-[80vh] flex flex-col animate-fade-in">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold">加载节拍模式</h3>
-              <button onClick={() => setShowLoadModal(false)} className="p-2 hover:bg-slate-700 rounded-full"><X className="w-5 h-5" /></button>
+              <button onClick={() => setShowLoadModal(false)} className="p-2 hover:bg-slate-700 rounded-full transition-colors">
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
               {savedPatterns.length === 0 ? (
-                <div className="text-center text-slate-500 py-8">暂无保存的模式</div>
+                <div className="text-center text-slate-500 py-12">暂无保存的模式</div>
               ) : (
                 [...savedPatterns].reverse().map((p) => (
                   <div key={p.id} className="flex items-center justify-between p-3 bg-slate-700/50 hover:bg-slate-700 rounded-xl transition-colors group">
@@ -674,7 +743,7 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
                       <div className="text-xs text-slate-400 flex gap-3 mt-1">
                         <span>{p.bpm} BPM</span>
                         <span>{p.length} 步</span>
-                        <span>{new Date(p.updatedAt).toLocaleDateString()} {new Date(p.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>{new Date(p.updatedAt).toLocaleDateString()}</span>
                       </div>
                     </div>
                     <button
@@ -696,4 +765,3 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
 };
 
 export default BeatEditor;
-

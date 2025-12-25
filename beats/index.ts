@@ -46,3 +46,4 @@ export function convertLegacyPattern(pattern: number[] | any[]): any[] {
   });
 }
 
+

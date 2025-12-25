@@ -14,3 +14,4 @@ export const JumpDisplay: React.FC<DisplayProps> = ({ landmarks, accuracy, beatS
 };
 
 
+

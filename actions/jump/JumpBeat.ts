@@ -13,3 +13,4 @@ export const JumpBeat: BeatPattern = {
     { type: 'hihat', volume: 0.6 },
   ],
 };
+

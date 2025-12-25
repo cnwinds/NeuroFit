@@ -218,25 +218,6 @@ const Metronome: React.FC<MetronomeProps> = ({
         <Square className="w-4 h-4 fill-current" />
       </button>
 
-      {/* 节拍指示器 */}
-      <div className="flex items-center gap-1">
-        {pattern.pattern.slice(0, 16).map((_, index) => (
-          <div
-            key={index}
-            className={`w-2 h-2 rounded-full transition-all ${index === currentStep
-              ? 'bg-teal-400 scale-125 shadow-lg shadow-teal-400/50'
-              : index < currentStep
-                ? 'bg-teal-500/30'
-                : 'bg-slate-600/30'
-              }`}
-          />
-        ))}
-      </div>
-
-      {/* BPM 显示 */}
-      <div className="text-sm text-slate-400 font-mono">
-        {pattern.bpm} BPM
-      </div>
     </div>
   );
 };
