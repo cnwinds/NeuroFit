@@ -43,6 +43,9 @@ export const analyzeMovement = async (landmarksSequence: any[]): Promise<any> =>
         });
 
         const text = result.text;
+        if (!text) {
+            throw new Error("AI 返回内容为空");
+        }
 
         const jsonMatch = text.match(/\{.*\}/s);
         if (jsonMatch) {
