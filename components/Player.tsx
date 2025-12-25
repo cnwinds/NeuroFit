@@ -40,6 +40,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
   const [modelReady, setModelReady] = useState(false);
   const [showPerformance, setShowPerformance] = useState(false);
   const [currentLandmarks, setCurrentLandmarks] = useState<any[]>([]);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   // --- Refs ---
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -110,11 +111,11 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
       } catch (err: any) {
         console.error("Initialization failed", err);
         if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-          alert("未找到摄像头设备，请检查连接。");
+          setCameraError("未找到摄像头设备，请检查连接。");
         } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          alert("摄像头权限被拒绝，请在浏览器设置中开启。");
+          setCameraError("摄像头权限被拒绝，请在浏览器设置中开启。");
         } else {
-          alert("摄像头初始化失败: " + err.message);
+          setCameraError("摄像头初始化失败: " + err.message);
         }
       }
     };
@@ -447,7 +448,9 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
           </div>
         </div>
         <div className="w-full pb-10 flex justify-center">
-          {cameraReady ? (
+          {cameraError ? (
+            <div className="text-red-300 bg-red-500/10 px-4 py-2 rounded-full border border-red-500/20 text-[10px] font-bold tracking-widest uppercase animate-pulse max-w-xs text-center">{cameraError}</div>
+          ) : cameraReady ? (
             <div className="text-green-400 bg-green-500/10 px-4 py-2 rounded-full border border-green-500/20 text-[10px] font-bold tracking-widest uppercase">CAMERA READY</div>
           ) : (
             <div className="text-red-300 bg-red-500/10 px-4 py-2 rounded-full border border-red-500/20 text-[10px] font-bold tracking-widest uppercase animate-pulse">INITIALIZING...</div>
