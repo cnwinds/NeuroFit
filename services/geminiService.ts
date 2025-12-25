@@ -1,19 +1,14 @@
 import { getStickFigureBase64, getPredefinedAnimation } from "./stickFigureAsset";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
-// Initialize Gemini API
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
+const ai = new GoogleGenAI({ apiKey });
 
-/**
- * 分析运动数据
- */
 export const analyzeMovement = async (landmarksSequence: any[]): Promise<any> => {
     try {
-        if (!import.meta.env.VITE_GEMINI_API_KEY) {
-            throw new Error("请先在环境配置中设置 VITE_GEMINI_API_KEY");
+        if (!apiKey) {
+            throw new Error("请先设置 GEMINI_API_KEY 或 VITE_GEMINI_API_KEY 环境变量");
         }
-
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
         const sampledData = landmarksSequence.filter((_, i) => i % 5 === 0);
         const simplifiedData = sampledData.map(frame =>
@@ -27,7 +22,7 @@ export const analyzeMovement = async (landmarksSequence: any[]): Promise<any> =>
         const prompt = `
         你是一个专业的健身动作分析AI。我会给你一段 3D 骨骼点序列数据（MediaPipe Pose 格式）。
         这段数据包含用户重复做了至少 3 次的动作。
-        
+
         请分析这段数据并返回一个 JSON 对象，包含以下字段：
         1. name: 动作的中文名称
         2. englishName: 动作的英文名称 (UpperCamelCase, 如 "Squat" 或 "JumpingJack")
@@ -35,18 +30,21 @@ export const analyzeMovement = async (landmarksSequence: any[]): Promise<any> =>
         4. keyPoints: 一个包含 3 个索引的数组，代表该动作中最关键的三个关节点（MediaPipe 索引）。
         5. threshold: 动作触发的阈值。
         6. logic: 简述检测该动作的逻辑。
-        
+
         数据序列：
-        \${JSON.stringify(simplifiedData)}
-        
+        ${JSON.stringify(simplifiedData)}
+
         请务必只返回 JSON 格式，不要有任何多余的解释。
         `;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
+        const result = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt
+        });
 
-        const jsonMatch = text.match(/\\{.*\\}/s);
+        const text = result.text;
+
+        const jsonMatch = text.match(/\{.*\}/s);
         if (jsonMatch) {
             return JSON.parse(jsonMatch[0]);
         }
