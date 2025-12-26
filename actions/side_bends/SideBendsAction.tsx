@@ -7,6 +7,7 @@ import { ActionComponent } from '../base/ActionBase';
 import { GenericActionGuide } from '../base/GenericActionGuide';
 import { SimpleDetector } from '../base/SimpleDetector';
 
+import { SideBendsBeat } from './beat';
 export const SideBendsAction: ActionComponent = {
     name: '侧面拉伸',
     englishName: 'SIDE BENDS',
@@ -14,13 +15,7 @@ export const SideBendsAction: ActionComponent = {
     targetParts: ['core'],
     durationSeconds: 40,
     Guide: (props) => <GenericActionGuide actionName="SIDE BENDS" {...props} />,
-    Beat: {
-        bpm: 60,
-        pattern: [
-            { type: 'kick', volume: 0.6 },
-            { type: 'hihat', volume: 0.3 },
-        ],
-    },
+    Beat: SideBendsBeat,
     Detector: new SimpleDetector({
         type: 'height',
         points: [15, 23], // 左手腕 vs 左髋

@@ -7,6 +7,7 @@ import { ActionComponent } from '../base/ActionBase';
 import { GenericActionGuide } from '../base/GenericActionGuide';
 import { SimpleDetector } from '../base/SimpleDetector';
 
+import { SwingBeat } from './beat';
 export const SwingAction: ActionComponent = {
     name: '摆动',
     englishName: 'SWING',
@@ -14,15 +15,7 @@ export const SwingAction: ActionComponent = {
     targetParts: ['arms', 'core'],
     durationSeconds: 30,
     Guide: (props) => <GenericActionGuide actionName="SWING" {...props} />,
-    Beat: {
-        bpm: 110,
-        pattern: [
-            { type: 'kick', volume: 0.8 },
-            { type: 'hihat', volume: 0.4 },
-            { type: 'snare', volume: 0.7 },
-            { type: 'hihat', volume: 0.4 },
-        ],
-    },
+    Beat: SwingBeat,
     Detector: new SimpleDetector({
         type: 'distance',
         points: [15, 23], // 左手腕 vs 左髋

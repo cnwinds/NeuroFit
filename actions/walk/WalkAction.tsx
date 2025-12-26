@@ -7,6 +7,7 @@ import { ActionComponent } from '../base/ActionBase';
 import { GenericActionGuide } from '../base/GenericActionGuide';
 import { SimpleDetector } from '../base/SimpleDetector';
 
+import { WalkBeat } from './beat';
 export const WalkAction: ActionComponent = {
     name: '行走',
     englishName: 'WALK',
@@ -14,15 +15,7 @@ export const WalkAction: ActionComponent = {
     targetParts: ['legs'],
     durationSeconds: 60,
     Guide: (props) => <GenericActionGuide actionName="WALK" {...props} />,
-    Beat: {
-        bpm: 100,
-        pattern: [
-            { type: 'kick', volume: 0.8 },
-            { type: 'hihat', volume: 0.4 },
-            { type: 'kick', volume: 0.8 },
-            { type: 'hihat', volume: 0.4 },
-        ],
-    },
+    Beat: WalkBeat,
     Detector: new SimpleDetector({
         type: 'height',
         points: [25, 23], // 左膝 vs 左髋

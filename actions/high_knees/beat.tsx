@@ -1,7 +1,7 @@
 /**
  * HighKnees 动作的节拍配置
  * BPM: 60
- * 自动生成于: 2025/12/26 13:43:36
+ * 自动生成于: 2025/12/26 13:52:57
  */
 
 import { BeatPattern } from '../base/ActionBase';
