@@ -37,6 +37,8 @@ export interface BeatPattern {
   pattern: DrumStep[] | DrumStep[][]; // 节拍模式数组，支持单乐器或是多乐器组合
   timeSignature?: [number, number]; // 拍号，如 [4, 4] 表示 4/4 拍
   swing?: number;                 // 摇摆感（0-100%）
+  totalBeats?: number;            // 总拍数（标记后确定，不可修改）
+  beatFrameMapping?: number[];    // 每拍对应的原始帧索引
 }
 
 /**

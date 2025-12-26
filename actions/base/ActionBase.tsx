@@ -41,13 +41,15 @@ export interface BeatPattern {
   templateId?: string;            // 节拍模板ID (可选，如果使用了节拍编辑器保存的模板)
   timeSignature?: [number, number]; // 拍号（可选）
   swing?: number;                 // 摇摆感（可选）
+  totalBeats?: number;            // 总拍数（标记后确定，不可修改）
+  beatFrameMapping?: number[];    // 每拍对应的原始帧索引
 }
 
 /**
  * 动作检测器接口
  */
 export interface ActionDetector {
-  detect: (landmarks: any[], previousLandmarks: any[]) => DetectionResult;
+  detect: (landmarks: any[], previousLandmarks: any[], beatStep?: number, beatProgress?: number) => DetectionResult;
   reset: () => void;
 }
 

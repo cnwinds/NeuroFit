@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, X, Play, Square, RefreshCcw, Loader2, Wand2, Check, Save } from 'lucide-react';
+import { Camera, X, Play, Square, RefreshCcw, Loader2, Wand2, Check, Save, MapPin } from 'lucide-react';
 import { poseService } from '../services/poseService';
 import { PoseLandmarker } from "@mediapipe/tasks-vision";
 import { analyzeMovement } from '../services/geminiService';
+import ActionMarkerEditor from './ActionMarkerEditor';
 
 interface Props {
     onClose: () => void;
@@ -12,7 +13,8 @@ enum MocapState {
     IDLE,
     RECORDING,
     ANALYZING,
-    RESULT
+    RESULT,
+    MARKING
 }
 
 const MocapEditor: React.FC<Props> = ({ onClose }) => {
@@ -229,11 +231,50 @@ export default \${actionName}Action;
         }
     };
 
+    const handleSaveGuide = async (guideData: any) => {
+        if (!analysisResult) return;
+        
+        try {
+            const actionName = analysisResult.englishName.toLowerCase().replace(/\s+/g, '_');
+            
+            const response = await fetch('/api/save-guide', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    actionName,
+                    guideData: {
+                        ...guideData,
+                        bpm: guideData.bpm || 120
+                    }
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                setState(MocapState.RESULT);
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (err: any) {
+            setError("保存Guide失败: " + err.message);
+        }
+    };
+
     const reset = () => {
         setRecordedData([]);
         setAnalysisResult(null);
         setState(MocapState.IDLE);
     };
+
+    if (state === MocapState.MARKING) {
+        return (
+            <ActionMarkerEditor
+                recordedFrames={recordedData}
+                onClose={() => setState(MocapState.IDLE)}
+                onSave={handleSaveGuide}
+            />
+        );
+    }
 
     return (
         <div className="fixed inset-0 z-[100] bg-slate-950 text-white flex flex-col font-sans">
@@ -340,6 +381,14 @@ export default \${actionName}Action;
                                 <h4 className="text-xl font-black italic text-white uppercase">{analysisResult.name}</h4>
                                 <p className="text-sm text-white/70 mt-1">{analysisResult.description}</p>
                             </div>
+
+                            <button
+                                onClick={() => setState(MocapState.MARKING)}
+                                className="w-full flex items-center justify-center gap-3 bg-orange-500 text-white font-black py-4 rounded-2xl hover:bg-orange-600 transition-all"
+                            >
+                                <MapPin className="w-5 h-5" />
+                                标记动作拍点
+                            </button>
 
                             <button
                                 onClick={handleSaveToProject}

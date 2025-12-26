@@ -3,9 +3,8 @@
  */
 
 import { ActionComponent } from '../base/ActionBase';
-import { SayHiGuide } from './SayHiGuide';
-import { SayHiDetector } from './SayHiDetector';
-import { SayHiDisplay } from './SayHiDisplay';
+import { Guide } from '../../components/Guide';
+import { GuideBasedDetector } from '../base/GuideBasedDetector';
 import { SayHiBeatGame } from './SayHiBeatGame';
 
 import { SayHiBeat } from './beat';
@@ -16,8 +15,8 @@ export const SayHiAction: ActionComponent = {
     category: 'flexibility',
     targetParts: ['arms', 'shoulders'],
     durationSeconds: 15,
-    Guide: (props) => <SayHiGuide {...props} />,
+    Guide: (props) => <Guide actionName="say_hi" {...props} />,
     Beat: SayHiBeat,
-    Detector: new SayHiDetector(),
+    Detector: new GuideBasedDetector('say_hi'),
     Display: (props) => <SayHiBeatGame {...props} />,
 };

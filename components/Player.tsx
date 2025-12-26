@@ -6,9 +6,11 @@ import { Play, Pause, SkipForward, CheckCircle, Star, Loader2, Camera, X, Activi
 import { PoseLandmarker } from "@mediapipe/tasks-vision";
 import { getAction, ActionComponent } from '../actions';
 import { poseService } from '../services/poseService';
-import { ActionScore } from '../actions/base/types';
+import { ActionScore, GuideData } from '../actions/base/types';
 import { calculateScore } from '../services/scoreCalculator';
 import { CompletionEffect } from './CompletionEffect';
+import { loadGuideData } from '../actions/base/guideLoader';
+import { GuidePreview } from './GuidePreview';
 
 interface Props {
   plan: WorkoutPlan;
@@ -41,6 +43,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
   const [showPerformance, setShowPerformance] = useState(false);
   const [currentLandmarks, setCurrentLandmarks] = useState<any[]>([]);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [guideData, setGuideData] = useState<GuideData | null>(null);
 
   // --- Refs ---
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -80,8 +83,16 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
     if (action) {
       currentActionRef.current = action;
       action.Detector.reset();
+      
+      // 检测是否有 guide 数据
+      if (action.Beat.totalBeats) {
+        loadGuideData(action.englishName).then(setGuideData);
+      } else {
+        setGuideData(null);
+      }
     } else {
       currentActionRef.current = null;
+      setGuideData(null);
     }
   }, [currentExerciseIndex]);
 
@@ -217,7 +228,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
 
           const isDetecting = (state === PlayerState.PLAYING || state === PlayerState.INSTRUCTION);
           if (currentActionRef.current && isDetecting) {
-            const res = currentActionRef.current.Detector.detect(landmarks, previousLandmarksRef.current);
+            const res = currentActionRef.current.Detector.detect(landmarks, previousLandmarksRef.current, beatStep, beatProgress);
 
             if (state === PlayerState.PLAYING) setActionAccuracy(res.accuracy);
 
@@ -433,7 +444,9 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
         </div>
         <div className="flex-1 w-full flex items-center justify-center my-6">
           <div className="relative w-full max-w-sm aspect-square bg-slate-800/50 backdrop-blur-md rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center">
-            {currentActionRef.current ? (
+            {guideData && currentActionRef.current ? (
+              <GuidePreview guideData={guideData} beatStep={beatStep} beatProgress={beatProgress} />
+            ) : currentActionRef.current ? (
               <currentActionRef.current.Guide
                 onReady={handleGuideReady}
                 landmarks={currentLandmarks}
@@ -517,6 +530,16 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
             bpm={currentActionRef.current.Beat.bpm}
             patternLength={currentActionRef.current.Beat.pattern.length}
           />
+        </div>
+      )}
+
+      {/* Guide Preview Window */}
+      {guideData && (
+        <div className="fixed bottom-4 right-4 z-50 bg-black rounded-2xl overflow-hidden border border-white/20 shadow-2xl" style={{ width: 'calc(50vw / 2)', maxWidth: '320px', aspectRatio: '4/3' }}>
+          <div className="absolute top-2 left-2 bg-teal-500/80 backdrop-blur-sm px-2 py-1 rounded text-xs font-black text-white z-10">
+            Guide 预览
+          </div>
+          <GuidePreview guideData={guideData} beatStep={beatStep} beatProgress={beatProgress} />
         </div>
       )}
 

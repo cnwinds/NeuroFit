@@ -30,3 +30,11 @@ export type BodyPart = 'arms' | 'legs' | 'core' | 'full-body' | 'shoulders' | 'b
 
 export type ActionCategory = 'cardio' | 'strength' | 'flexibility' | 'balance';
 
+export interface GuideData {
+  totalBeats: number;
+  framesPerBeat: number;
+  frames: number[][][];
+  bpm: number;
+  markedFrameIndices: number[];
+}
+

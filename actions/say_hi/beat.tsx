@@ -15,4 +15,6 @@ export const SayHiBeat: BeatPattern = {
     [{ type: 'tom', volume: 0.6 }, { type: 'hihat', volume: 0.6 }],
     []
   ],
+  totalBeats: 4,
+  beatFrameMapping: [0, 15, 30, 45]
 };

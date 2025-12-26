@@ -4,11 +4,14 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { X, Play, Pause, Save, ArrowLeft, Music, CheckCircle2, AlertCircle, Plus, Trash2, Pencil } from 'lucide-react';
+import { X, Play, Pause, Save, ArrowLeft, Music, CheckCircle2, AlertCircle, Plus, Trash2, Pencil, Lock } from 'lucide-react';
 import { getAllActions, type ActionComponent } from '../actions';
 import Metronome from './Metronome';
 import PageNavigator from './PageNavigator';
 import { type DrumType, type DrumStep, type BeatPattern, getAudioEngine } from '../beats';
+import { loadGuideData } from '../actions/base/guideLoader';
+import type { GuideData } from '../actions/base/types';
+import { GuidePreview } from './GuidePreview';
 
 interface ActionBeatEditorProps {
   onClose?: () => void;
@@ -68,8 +71,15 @@ const ActionBeatEditor: React.FC<ActionBeatEditorProps> = ({ onClose }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [drumToDelete, setDrumToDelete] = useState<DrumType | null>(null);
   
+  // Guide数据状态
+  const [guideData, setGuideData] = useState<GuideData | null>(null);
+  const [guidePreviewStep, setGuidePreviewStep] = useState(0);
+  const [guidePreviewProgress, setGuidePreviewProgress] = useState(0);
+  
   const audioEngineRef = useRef<ReturnType<typeof getAudioEngine> | null>(null);
   const currentPageRef = useRef(0);
+  const guideAnimationRef = useRef<number | null>(null);
+  const currentStepStartTimeRef = useRef<number>(0);
 
   // 加载所有动作
   useEffect(() => {
@@ -115,6 +125,13 @@ const ActionBeatEditor: React.FC<ActionBeatEditorProps> = ({ onClose }) => {
       setPattern(patternArray);
       setCurrentPage(0);
       setCurrentStep(0);
+
+      // 检测是否有 guide 数据
+      if (beat.totalBeats) {
+        loadGuideData(selectedAction.englishName).then(setGuideData);
+      } else {
+        setGuideData(null);
+      }
     }
   }, [selectedAction]);
 
@@ -124,6 +141,50 @@ const ActionBeatEditor: React.FC<ActionBeatEditorProps> = ({ onClose }) => {
       setPattern(Array(patternLength).fill(null).map(() => []));
     }
   }, [patternLength, pattern.length]);
+
+  // Guide 预览平滑动画
+  useEffect(() => {
+    if (!isPlaying || !guideData) {
+      if (guideAnimationRef.current) {
+        cancelAnimationFrame(guideAnimationRef.current);
+        guideAnimationRef.current = null;
+      }
+      return;
+    }
+
+    const animate = () => {
+      const now = performance.now();
+      const elapsed = now - currentStepStartTimeRef.current;
+      const beatDurationMs = (60 / bpm) * 1000;
+      const stepDurationMs = beatDurationMs / 4; // 每个步进的时长（1/4拍）
+
+      const progress = Math.min(elapsed / stepDurationMs, 1);
+      setGuidePreviewProgress(progress);
+
+      guideAnimationRef.current = requestAnimationFrame(animate);
+    };
+
+    guideAnimationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (guideAnimationRef.current) {
+        cancelAnimationFrame(guideAnimationRef.current);
+        guideAnimationRef.current = null;
+      }
+    };
+  }, [isPlaying, guideData, bpm]);
+
+  // 停止播放时重置 Guide 预览
+  useEffect(() => {
+    if (!isPlaying && guideData) {
+      if (guideAnimationRef.current) {
+        cancelAnimationFrame(guideAnimationRef.current);
+        guideAnimationRef.current = null;
+      }
+      setGuidePreviewStep(0);
+      setGuidePreviewProgress(0);
+    }
+  }, [isPlaying, guideData]);
 
   // 切换单元格状态
   const toggleCell = useCallback((stepIndex: number, drumType: DrumType) => {
@@ -385,6 +446,10 @@ const ActionBeatEditor: React.FC<ActionBeatEditorProps> = ({ onClose }) => {
     if (targetPage !== currentPageRef.current) {
       setCurrentPage(targetPage);
     }
+    // 同步 Guide 预览 - 重置时间和进度
+    currentStepStartTimeRef.current = performance.now();
+    setGuidePreviewStep(step);
+    setGuidePreviewProgress(0);
   }, []);
 
   // 检查单元格是否激活
@@ -539,9 +604,13 @@ const ActionBeatEditor: React.FC<ActionBeatEditorProps> = ({ onClose }) => {
             {/* Length 和 Swing */}
             <div className="flex items-center gap-2.5">
               <div className="flex flex-col gap-1">
-                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tighter text-white/20 leading-tight">Length</span>
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tighter text-white/20 leading-tight">
+                  Length
+                  {guideData && <Lock className="w-3 h-3 inline ml-1 text-orange-400" />}
+                </span>
                 <select
                   value={patternLength}
+                  disabled={guideData !== null}
                   onChange={(e) => {
                     const newLength = Number(e.target.value);
                     setPatternLength(newLength);
@@ -553,7 +622,9 @@ const ActionBeatEditor: React.FC<ActionBeatEditorProps> = ({ onClose }) => {
                     });
                     setCurrentPage(0);
                   }}
-                  className="bg-transparent text-[10px] sm:text-xs font-black text-teal-400 focus:outline-none appearance-none cursor-pointer leading-tight"
+                  className={`text-[10px] sm:text-xs font-black text-teal-400 focus:outline-none leading-tight ${
+                    guideData ? 'bg-transparent opacity-50' : 'bg-transparent appearance-none cursor-pointer'
+                  }`}
                 >
                   {[4, 8, 12, 16, 24, 32].map(len => (
                     <option key={len} value={len} className="bg-[#0f172a] text-white">{len} STEPS</option>
@@ -937,6 +1008,16 @@ const ActionBeatEditor: React.FC<ActionBeatEditorProps> = ({ onClose }) => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Guide Preview Window */}
+      {guideData && selectedAction && (
+        <div className="fixed bottom-4 right-4 z-50 bg-black rounded-2xl overflow-hidden border border-white/20 shadow-2xl" style={{ width: 'calc(50vw / 2)', maxWidth: '320px', aspectRatio: '4/3' }}>
+          <div className="absolute top-2 left-2 bg-teal-500/80 backdrop-blur-sm px-2 py-1 rounded text-xs font-black text-white z-10">
+            Guide 预览
+          </div>
+          <GuidePreview guideData={guideData} beatStep={guidePreviewStep} beatProgress={guidePreviewProgress} />
         </div>
       )}
     </div>

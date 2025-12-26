@@ -103,6 +103,72 @@ const actionSaverPlugin: Plugin = {
         res.end('Method Not Allowed');
       }
     });
+
+    // API: Save guide file
+    server.middlewares.use(async (req: any, res: any, next: any) => {
+      if (req.url !== '/api/save-guide') return next();
+      
+      if (req.method === 'POST') {
+        try {
+          const body = await readBody(req);
+          const data = JSON.parse(body);
+          const { actionName, guideData } = data;
+          
+          const actionDir = path.resolve(__dirname, 'actions', actionName);
+          const guideFilePath = path.join(actionDir, 'guide.ts');
+
+          if (!fs.existsSync(actionDir)) {
+            throw new Error(`Action directory not found: ${actionDir}`);
+          }
+
+          // Generate guide code
+          const guideCode = `
+import type { GuideData } from '../base/types';
+
+const guide: GuideData = {
+  totalBeats: ${guideData.totalBeats},
+  framesPerBeat: ${guideData.framesPerBeat},
+  frames: ${JSON.stringify(guideData.frames)},
+  bpm: ${guideData.bpm},
+  markedFrameIndices: ${JSON.stringify(guideData.markedFrameIndices)}
+};
+
+export default guide;
+export { guide };
+`;
+
+          // Save guide file
+          fs.writeFileSync(guideFilePath, guideCode, 'utf-8');
+
+          // Update beat.tsx to include totalBeats and beatFrameMapping
+          const beatFilePath = path.join(actionDir, 'beat.tsx');
+          if (fs.existsSync(beatFilePath)) {
+            const beatContent = fs.readFileSync(beatFilePath, 'utf-8');
+            const updatedBeatContent = beatContent.replace(
+              /(const beat: BeatPattern = \{[^}]*)(\})/,
+              `$1,\n  totalBeats: ${guideData.totalBeats},\n  beatFrameMapping: ${JSON.stringify(guideData.markedFrameIndices)}\n$2`
+            );
+            fs.writeFileSync(beatFilePath, updatedBeatContent, 'utf-8');
+          }
+
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ 
+            success: true, 
+            path: guideFilePath,
+            beatFileUpdated: fs.existsSync(beatFilePath)
+          }));
+        } catch (err: any) {
+          console.error('Save guide error:', err);
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: false, error: err.message }));
+        }
+      } else {
+        res.statusCode = 405;
+        res.end('Method Not Allowed');
+      }
+    });
   }
 };
 
