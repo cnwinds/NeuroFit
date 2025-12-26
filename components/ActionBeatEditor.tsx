@@ -8,7 +8,7 @@ import { X, Play, Pause, Save, ArrowLeft, Music, CheckCircle2, AlertCircle, Plus
 import { getAllActions, type ActionComponent } from '../actions';
 import Metronome from './Metronome';
 import PageNavigator from './PageNavigator';
-import { type DrumType, type DrumStep, type BeatPattern, type SavedBeatPattern, getAudioEngine } from '../beats';
+import { type DrumType, type DrumStep, type BeatPattern, getAudioEngine } from '../beats';
 
 interface ActionBeatEditorProps {
   onClose?: () => void;

@@ -9,12 +9,11 @@ const IS_DEV = import.meta.env.DEV;
 
 interface Props {
   onPlanGenerated: (plan: WorkoutPlan) => void;
-  onOpenBeatEditor?: () => void;
   onOpenActionBeatEditor?: () => void;
   onOpenMocapEditor?: () => void;
 }
 
-const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor, onOpenActionBeatEditor, onOpenMocapEditor }) => {
+const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenActionBeatEditor, onOpenMocapEditor }) => {
   const [focus, setFocus] = useState('全身');
   const [duration, setDuration] = useState(7);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.BEGINNER);
@@ -164,17 +163,6 @@ const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor, 
               开始运动
             </button>
           </div>
-
-          {IS_DEV && onOpenBeatEditor && (
-            <button
-              type="button"
-              onClick={onOpenBeatEditor}
-              className="w-full bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-sm min-h-[56px]"
-            >
-              <Music className="w-5 h-5" />
-              设计节奏
-            </button>
-          )}
 
           {IS_DEV && onOpenActionBeatEditor && (
             <button

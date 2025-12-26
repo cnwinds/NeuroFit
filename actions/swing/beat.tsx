@@ -1,7 +1,7 @@
 /**
  * Swing 动作的节拍配置
  * BPM: 110
- * 自动生成于: 2025/12/26 13:53:37
+ * 自动生成于: 2025/12/26 14:13:06
  */
 
 import { BeatPattern } from '../base/ActionBase';
