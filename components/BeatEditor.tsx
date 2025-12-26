@@ -4,8 +4,9 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { X, Play, Pause, Square, Save, Download, Upload, RotateCcw, Plus, Trash2 } from 'lucide-react';
+import { X, Play, Pause, Square, Save, Download, Upload, RotateCcw, Plus, Trash2, Edit2, Pencil } from 'lucide-react';
 import Metronome from './Metronome';
+import PageNavigator from './PageNavigator';
 import { type DrumType, type DrumStep, type BeatPattern, type SavedBeatPattern, getAudioEngine } from '../beats';
 
 interface BeatEditorProps {
@@ -13,22 +14,51 @@ interface BeatEditorProps {
   onSave?: (pattern: SavedBeatPattern) => void;
 }
 
-// 音色配置
-const DRUM_TYPES: Array<{ type: DrumType; label: string; color: string; icon?: string }> = [
-  { type: 'kick', label: 'Kick', color: 'bg-blue-500' },
-  { type: 'snare', label: 'Snare', color: 'bg-red-500' },
-  { type: 'hihat', label: 'HiHat', color: 'bg-yellow-500' },
-  { type: 'openHihat', label: 'Open HiHat', color: 'bg-yellow-600' },
-  { type: 'crash', label: 'Crash', color: 'bg-purple-500' },
-  { type: 'tom', label: 'Tom', color: 'bg-orange-500' },
-  { type: 'ride', label: 'Ride', color: 'bg-cyan-500' },
+// 音色类型定义
+type DrumConfig = {
+  type: DrumType;
+  label: string;
+  color: string;
+  icon?: string;
+};
+
+// 所有可用的音色类型及其默认配置
+const AVAILABLE_DRUM_TYPES: Record<DrumType, Omit<DrumConfig, 'type'>> = {
+  kick: { label: 'Kick', color: 'bg-blue-500' },
+  snare: { label: 'Snare', color: 'bg-red-500' },
+  hihat: { label: 'HiHat', color: 'bg-yellow-500' },
+  openHihat: { label: 'Open HiHat', color: 'bg-yellow-600' },
+  crash: { label: 'Crash', color: 'bg-purple-500' },
+  tom: { label: 'Tom', color: 'bg-orange-500' },
+  ride: { label: 'Ride', color: 'bg-cyan-500' },
+};
+
+// 默认音色配置（初始显示的音色）
+const DEFAULT_DRUM_CONFIGS: DrumConfig[] = [
+  { type: 'kick', ...AVAILABLE_DRUM_TYPES.kick },
+  { type: 'snare', ...AVAILABLE_DRUM_TYPES.snare },
+  { type: 'hihat', ...AVAILABLE_DRUM_TYPES.hihat },
 ];
 
-const DEFAULT_PATTERN_LENGTH = 16;
+// 可选的颜色列表
+const COLOR_OPTIONS = [
+  { name: '蓝色', value: 'bg-blue-500' },
+  { name: '红色', value: 'bg-red-500' },
+  { name: '黄色', value: 'bg-yellow-500' },
+  { name: '深黄', value: 'bg-yellow-600' },
+  { name: '紫色', value: 'bg-purple-500' },
+  { name: '橙色', value: 'bg-orange-500' },
+  { name: '青色', value: 'bg-cyan-500' },
+  { name: '绿色', value: 'bg-green-500' },
+  { name: '粉色', value: 'bg-pink-500' },
+  { name: '靛蓝', value: 'bg-indigo-500' },
+];
+
+const DEFAULT_PATTERN_LENGTH = 8;
 
 const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
   // 状态管理
-  const [bpm, setBpm] = useState(120);
+  const [bpm, setBpm] = useState(60);
   const [swing, setSwing] = useState(0);
   const [patternLength, setPatternLength] = useState(DEFAULT_PATTERN_LENGTH);
   // 每个步骤是一个 DrumStep[] 数组（支持多个乐器同时播放）
@@ -48,6 +78,29 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
   const [currentPage, setCurrentPage] = useState(0);
   const [soloDrum, setSoloDrum] = useState<DrumType | null>(null);
   const currentPageRef = useRef(0);
+
+  // 音色管理状态
+  const [drumConfigs, setDrumConfigs] = useState<DrumConfig[]>(() => {
+    // 从 localStorage 加载保存的音色配置，如果没有则使用默认配置
+    try {
+      const saved = localStorage.getItem('beatEditorDrumConfigs');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error('Failed to load drum configs', e);
+    }
+    return DEFAULT_DRUM_CONFIGS;
+  });
+  const [showAddDrumModal, setShowAddDrumModal] = useState(false);
+  const [showEditDrumModal, setShowEditDrumModal] = useState(false);
+  const [editingDrum, setEditingDrum] = useState<DrumConfig | null>(null);
+  const [newDrumType, setNewDrumType] = useState<DrumType>('kick');
+  const [newDrumLabel, setNewDrumLabel] = useState('');
+  const [newDrumColor, setNewDrumColor] = useState('bg-blue-500');
+  const [editDrumType, setEditDrumType] = useState<DrumType>('kick');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [drumToDelete, setDrumToDelete] = useState<DrumType | null>(null);
 
   // 同步 Ref 以便在回调中使用
   useEffect(() => {
@@ -75,6 +128,15 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
       console.error('Failed to load saved patterns', e);
     }
   }, []);
+
+  // 保存音色配置到 localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('beatEditorDrumConfigs', JSON.stringify(drumConfigs));
+    } catch (e) {
+      console.error('Failed to save drum configs', e);
+    }
+  }, [drumConfigs]);
 
   // 初始化音频引擎
   useEffect(() => {
@@ -407,6 +469,129 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
     localStorage.setItem('savedBeatPatterns', JSON.stringify(newPatterns));
   }, [savedPatterns]);
 
+  // 音色管理函数
+  const handleAddDrum = useCallback(() => {
+    // 检查该音色类型是否已存在
+    if (drumConfigs.some(d => d.type === newDrumType)) {
+      alert('该音色类型已存在！');
+      return;
+    }
+
+    const defaultConfig = AVAILABLE_DRUM_TYPES[newDrumType];
+    const newDrum: DrumConfig = {
+      type: newDrumType,
+      label: newDrumLabel.trim() || defaultConfig.label,
+      color: newDrumColor,
+    };
+
+    setDrumConfigs(prev => [...prev, newDrum]);
+    setShowAddDrumModal(false);
+    setNewDrumType('kick');
+    setNewDrumLabel('');
+    setNewDrumColor('bg-blue-500');
+  }, [drumConfigs, newDrumType, newDrumLabel, newDrumColor]);
+
+  const handleEditDrum = useCallback(() => {
+    if (!editingDrum) return;
+
+    const oldDrumType = editingDrum.type;
+    const newDrumType = editDrumType;
+    const isTypeChanged = oldDrumType !== newDrumType;
+
+    // 如果更换了音色类型，检查新类型是否已被使用
+    if (isTypeChanged && drumConfigs.some(d => d.type === newDrumType && d.type !== oldDrumType)) {
+      alert('该音色类型已被使用！');
+      return;
+    }
+
+    // 更新音色配置
+    setDrumConfigs(prev => {
+      // 如果更换了音色类型，使用新类型的默认名称
+      if (isTypeChanged) {
+        const defaultLabel = AVAILABLE_DRUM_TYPES[newDrumType].label;
+        return prev.map(d => 
+          d.type === oldDrumType 
+            ? { type: newDrumType, label: defaultLabel, color: newDrumColor }
+            : d
+        );
+      } else {
+        // 只更新颜色
+        return prev.map(d => 
+          d.type === oldDrumType 
+            ? { ...d, color: newDrumColor }
+            : d
+        );
+      }
+    });
+
+    // 如果更换了音色类型，需要更新模式中所有步骤
+    if (isTypeChanged) {
+      setPattern(prev => prev.map(step => 
+        Array.isArray(step) 
+          ? step.map(d => d.type === oldDrumType ? { ...d, type: newDrumType } : d)
+          : []
+      ));
+
+      // 如果 solo 的是旧音色，更新为新的音色类型
+      if (soloDrum === oldDrumType) {
+        setSoloDrum(newDrumType);
+      }
+    }
+
+    setShowEditDrumModal(false);
+    setEditingDrum(null);
+    setNewDrumLabel('');
+    setNewDrumColor('bg-blue-500');
+    setEditDrumType('kick');
+  }, [editingDrum, editDrumType, newDrumColor, drumConfigs, soloDrum]);
+
+  const handleDeleteDrum = useCallback((drumType: DrumType) => {
+    if (drumConfigs.length <= 1) {
+      return;
+    }
+    setDrumToDelete(drumType);
+    setShowDeleteConfirm(true);
+  }, [drumConfigs.length]);
+
+  const confirmDeleteDrum = useCallback(() => {
+    if (!drumToDelete) return;
+    
+    if (drumConfigs.length <= 1) {
+      setShowDeleteConfirm(false);
+      setDrumToDelete(null);
+      return;
+    }
+
+    // 删除音色配置
+    setDrumConfigs(prev => prev.filter(d => d.type !== drumToDelete));
+    
+    // 清除模式中该音色的所有步骤
+    setPattern(prev => prev.map(step => 
+      Array.isArray(step) ? step.filter(d => d.type !== drumToDelete) : []
+    ));
+
+    // 如果删除的是当前 solo 的音色，取消 solo
+    if (soloDrum === drumToDelete) {
+      setSoloDrum(null);
+    }
+
+    setShowDeleteConfirm(false);
+    setDrumToDelete(null);
+    
+    // 如果正在编辑被删除的音色，关闭编辑模态框
+    if (editingDrum && editingDrum.type === drumToDelete) {
+      setShowEditDrumModal(false);
+      setEditingDrum(null);
+    }
+  }, [drumToDelete, drumConfigs.length, soloDrum, editingDrum]);
+
+  const openEditDrumModal = useCallback((drum: DrumConfig) => {
+    setEditingDrum(drum);
+    setEditDrumType(drum.type);
+    setNewDrumColor(drum.color);
+    setShowEditDrumModal(true);
+  }, []);
+
   // 导出为 JSON
   const handleExport = useCallback(() => {
     const beatPattern = buildBeatPattern();
@@ -465,53 +650,86 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
       {/* 2. 增强版仪表盘 - 压缩间距 */}
       <div className="px-4 py-2 bg-gradient-to-b from-[#020617] to-slate-900/40 border-b border-white/5 flex flex-col gap-2 shrink-0">
 
-        <div className="flex flex-col sm:flex-row items-center gap-2">
-          {/* 播放与全局节拍指示 */}
-          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+        <div className="flex flex-row items-center justify-center gap-6 w-full px-[10px]">
+          {/* 左侧：播放按钮 */}
+          <div className="flex items-center w-fit">
             <Metronome
               pattern={useMemo(() => buildBeatPattern(), [buildBeatPattern])}
               isPlaying={isPlaying}
               onPlayStateChange={setIsPlaying}
               onBeatStepChange={handleBeatStepChange}
             />
+          </div>
 
-            <div className="h-6 w-px bg-white/10 hidden sm:block" />
-
-            {/* BPM 仪表板 */}
-            <div className="flex-1 sm:flex-none flex flex-col gap-0.5 min-w-[100px]">
-              <div className="flex justify-between items-end">
-                <span className="text-[8px] font-black uppercase tracking-widest text-teal-500/50 leading-none">Tempo</span>
-                <span className="text-base font-black italic text-teal-400 tabular-nums leading-none tracking-tighter">{bpm} <small className="text-[8px] opacity-40">BPM</small></span>
+          <div className="flex-1 flex flex-col gap-2 w-full sm:w-auto">
+            {/* 右侧上面：Tempo */}
+            <div className="flex items-center gap-2.5">
+              {/* BPM 仪表板 */}
+              <div className="flex-1 sm:flex-none flex flex-col gap-1 min-w-[100px]">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-teal-500/50 leading-tight">Tempo</span>
+                  <span className="text-base font-black italic text-teal-400 tabular-nums leading-tight tracking-tighter">{bpm} <small className="text-[10px] opacity-40">BPM</small></span>
+                </div>
+                <input
+                  type="range" min="60" max="200" value={bpm}
+                  onChange={(e) => setBpm(Number(e.target.value))}
+                  className="w-full sm:w-36 accent-teal-500 h-1 bg-white/10 rounded-full appearance-none cursor-pointer"
+                />
               </div>
-              <input
-                type="range" min="60" max="200" value={bpm}
-                onChange={(e) => setBpm(Number(e.target.value))}
-                className="w-full sm:w-36 accent-teal-500 h-1 bg-white/10 rounded-full appearance-none cursor-pointer"
-              />
+            </div>
+
+            {/* 右侧下面：Length 和 Swing */}
+            <div className="flex items-center gap-2.5">
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tighter text-white/20 leading-tight">Length</span>
+                <select
+                  value={patternLength}
+                  onChange={(e) => {
+                    const newLength = Number(e.target.value);
+                    setPatternLength(newLength);
+                    setPattern(prev => {
+                      const newPattern = [...prev];
+                      while (newPattern.length < newLength) newPattern.push([]);
+                      while (newPattern.length > newLength) newPattern.pop();
+                      return newPattern;
+                    });
+                    setCurrentPage(0);
+                  }}
+                  className="bg-transparent text-[10px] sm:text-xs font-black text-teal-400 focus:outline-none appearance-none cursor-pointer leading-tight"
+                >
+                  {[4, 8, 12, 16, 24, 32].map(len => (
+                    <option key={len} value={len} className="bg-[#0f172a] text-white">{len} STEPS</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="h-6 w-px bg-white/10 hidden sm:block" />
+
+              <div className="flex flex-col gap-1 flex-1 max-w-[100px] h-[28px]">
+                <div className="flex justify-between items-center pr-1">
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tighter text-white/20 leading-tight">Swing</span>
+                  <span className="text-[10px] sm:text-xs font-black italic tabular-nums text-teal-400 leading-tight">{swing}%</span>
+                </div>
+                <input
+                  type="range" min="0" max="100" value={swing}
+                  onChange={(e) => setSwing(Number(e.target.value))}
+                  className="w-full accent-teal-500 h-0.5 bg-white/10 rounded-full appearance-none cursor-pointer"
+                />
+              </div>
             </div>
           </div>
-
-          {/* 分页控制器 - 减小圆角 */}
-          <div className="flex items-center gap-1 p-0.5 bg-white/5 rounded-lg border border-white/5 w-full sm:w-auto overflow-x-auto no-scrollbar">
-            {Array.from({ length: Math.ceil(patternLength / 4) }).map((_, idx) => {
-              const isCurrentPage = currentPage === idx;
-              const hasActiveInPage = isPlaying && Math.floor(currentStep / 4) === idx;
-
-              return (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentPage(idx)}
-                  className={`flex-1 sm:flex-none px-2 py-1.5 rounded-md text-[8px] font-black uppercase transition-all whitespace-nowrap ${isCurrentPage
-                    ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/10'
-                    : 'bg-white/5 text-white/30 hover:bg-white/10'
-                    } ${hasActiveInPage ? 'ring-2 ring-teal-400 ring-offset-1 ring-offset-[#020617]' : ''}`}
-                >
-                  Page {idx + 1}
-                </button>
-              );
-            })}
-          </div>
         </div>
+      </div>
+
+      {/* 分页控制器容器 - 独立容器 */}
+      <div className="px-4 py-2 border-b border-white/5 shrink-0">
+        <PageNavigator
+          patternLength={patternLength}
+          currentPage={currentPage}
+          isPlaying={isPlaying}
+          currentStep={currentStep}
+          onPageChange={setCurrentPage}
+        />
       </div>
 
       {/* 3. 沉浸式网格编辑区 - 紧凑化布局 */}
@@ -522,7 +740,7 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
           <div className="flex-1 border border-white/10 rounded-xl overflow-hidden bg-slate-900/30 backdrop-blur-sm shadow-xl flex flex-col">
 
             <div className="flex-1 overflow-y-auto custom-scrollbar">
-              {DRUM_TYPES.map((drum) => {
+              {drumConfigs.map((drum) => {
                 const isSolo = soloDrum === drum.type;
                 const anySolo = soloDrum !== null;
                 const isDisabled = anySolo && !isSolo;
@@ -532,24 +750,35 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
                     key={drum.type}
                     className={`flex border-b border-white/5 last:border-0 transition-opacity duration-300 ${isDisabled ? 'opacity-30' : 'opacity-100'}`}
                   >
-                    {/* 左侧固定：Solo 切换器 - 减小内边距 */}
+                    {/* 左侧固定：组合按钮 - 左边2/3是Solo，右边1/3是编辑 */}
                     <div className="w-20 sm:w-28 bg-[#0f172a]/95 backdrop-blur-2xl px-2 py-1.5 sm:px-3 sm:py-2 border-r border-white/10 flex items-center shrink-0 sticky left-0 z-20">
-                      <button
-                        onClick={() => {
-                          setSoloDrum(isSolo ? null : drum.type);
-                          setSelectedDrumType(drum.type);
-                          playDrumPreview(drum.type);
-                        }}
-                        className={`w-full py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all relative overflow-hidden group border ${isSolo
-                          ? `${drum.color} text-white border-white/20 shadow-lg shadow-teal-500/10`
-                          : 'bg-white/5 text-white/30 border-transparent hover:bg-white/10'
-                          }`}
-                      >
-                        <div className="relative z-10 flex flex-col items-center">
-                          <span>{drum.label}</span>
-                          {isSolo && <span className="text-[6px] italic opacity-60 leading-none mt-0.5">SOLO</span>}
-                        </div>
-                      </button>
+                      <div className="w-full flex rounded-lg overflow-hidden border border-white/10 h-14">
+                        {/* 左边2/3：Solo功能 */}
+                        <button
+                          onClick={() => {
+                            setSoloDrum(isSolo ? null : drum.type);
+                            setSelectedDrumType(drum.type);
+                            playDrumPreview(drum.type);
+                          }}
+                          className={`flex-[2] h-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all relative overflow-hidden group flex items-center justify-center ${isSolo
+                            ? `${drum.color} text-white shadow-lg shadow-teal-500/10`
+                            : 'bg-white/5 text-white/30 hover:bg-white/10'
+                            }`}
+                        >
+                          <div className="relative z-10 flex flex-col items-center">
+                            <span>{drum.label}</span>
+                            {isSolo && <span className="text-[6px] italic opacity-60 leading-none mt-0.5">SOLO</span>}
+                          </div>
+                        </button>
+                        {/* 右边1/3：编辑入口 */}
+                        <button
+                          onClick={() => openEditDrumModal(drum)}
+                          className="flex-1 h-full bg-white/5 hover:bg-blue-500/20 text-white/40 hover:text-blue-400 transition-colors border-l border-white/10 flex items-center justify-center"
+                          title="编辑"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* 右侧：当页步进 - 减小间距与圆角 */}
@@ -589,12 +818,42 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
                   </div>
                 );
               })}
+
+              {/* 添加音色按钮 - 放在列表底部 */}
+              {(Object.keys(AVAILABLE_DRUM_TYPES) as DrumType[]).filter(type => !drumConfigs.some(d => d.type === type)).length > 0 && (
+                <div className="flex border-b border-white/5">
+                  <div className="w-20 sm:w-28 bg-[#0f172a]/95 backdrop-blur-2xl px-2 py-1.5 sm:px-3 sm:py-2 border-r border-white/10 flex items-center shrink-0 sticky left-0 z-20">
+                    <button
+                      onClick={() => {
+                        const availableTypes = (Object.keys(AVAILABLE_DRUM_TYPES) as DrumType[]).filter(type => !drumConfigs.some(d => d.type === type));
+                        if (availableTypes.length > 0) {
+                          setNewDrumType(availableTypes[0]);
+                          const defaultConfig = AVAILABLE_DRUM_TYPES[availableTypes[0]];
+                          setNewDrumLabel('');
+                          setNewDrumColor(defaultConfig.color);
+                          setShowAddDrumModal(true);
+                        }
+                      }}
+                      className="w-full h-14 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border border-teal-500/30 hover:border-teal-500/50 flex items-center justify-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>添加</span>
+                    </button>
+                  </div>
+                  <div className="flex-1 flex p-1.5 sm:p-3 gap-1.5 sm:gap-3 items-center">
+                    {/* 占位空间，保持布局一致 */}
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex-1 aspect-square sm:aspect-video sm:h-14" />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 底部播放头提示 - 压缩高度 */}
             <div className="flex border-t border-white/10 bg-black/40 p-1.5 sm:p-2">
               <div className="w-20 sm:w-28 border-r border-white/10 flex items-center justify-center">
-                <span className="text-[7px] font-black uppercase text-teal-500/20 tracking-[0.2em]">Timeline</span>
+                <span className="text-[9px] sm:text-[10px] font-black uppercase text-teal-500/20 tracking-[0.2em] leading-tight">Timeline</span>
               </div>
               <div className="flex-1 flex gap-1.5 sm:gap-3 px-1.5 sm:px-3">
                 {Array.from({ length: 4 }).map((_, i) => {
@@ -603,7 +862,7 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
                   return (
                     <div
                       key={stepIndex}
-                      className={`flex-1 text-center text-[9px] font-black italic ${isCurrentStep ? 'text-teal-400' : 'text-white/10'
+                      className={`flex-1 text-center text-[10px] sm:text-xs font-black italic leading-tight ${isCurrentStep ? 'text-teal-400' : 'text-white/10'
                         }`}
                     >
                       {stepIndex < patternLength ? String(stepIndex + 1).padStart(2, '0') : '--'}
@@ -620,68 +879,28 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
           <div className="max-w-7xl mx-auto">
             <div className="grid grid-cols-1 sm:flex sm:items-center sm:justify-between gap-1.5 sm:gap-2">
 
-              {/* 参数区 (左/上) */}
-              <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 bg-white/5 p-1 sm:p-1.5 rounded-lg border border-white/5">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[6px] font-black uppercase tracking-tighter text-white/20">Length</span>
-                  <select
-                    value={patternLength}
-                    onChange={(e) => {
-                      const newLength = Number(e.target.value);
-                      setPatternLength(newLength);
-                      setPattern(prev => {
-                        const newPattern = [...prev];
-                        while (newPattern.length < newLength) newPattern.push([]);
-                        while (newPattern.length > newLength) newPattern.pop();
-                        return newPattern;
-                      });
-                      setCurrentPage(0);
-                    }}
-                    className="bg-transparent text-[9px] font-black text-teal-400 focus:outline-none appearance-none cursor-pointer"
-                  >
-                    {[4, 8, 12, 16, 24, 32].map(len => (
-                      <option key={len} value={len} className="bg-[#0f172a] text-white">{len} STEPS</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="h-5 w-px bg-white/10" />
-
-                <div className="flex flex-col gap-0.5 flex-1 max-w-[100px]">
-                  <div className="flex justify-between items-center pr-1">
-                    <span className="text-[6px] font-black uppercase tracking-tighter text-white/20">Swing</span>
-                    <span className="text-[8px] font-black italic tabular-nums text-teal-400">{swing}%</span>
-                  </div>
-                  <input
-                    type="range" min="0" max="100" value={swing}
-                    onChange={(e) => setSwing(Number(e.target.value))}
-                    className="w-full accent-teal-500 h-0.5 bg-white/10 rounded-full appearance-none cursor-pointer"
-                  />
-                </div>
-              </div>
-
-              {/* 操作区 (右/下) */}
+              {/* 操作区 */}
               <div className="flex items-center gap-1 sm:gap-1.5">
                 <button
                   onClick={handleClear}
                   className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-2.5 py-2 bg-white/5 hover:bg-red-500/10 rounded-lg border border-white/5 text-white/40 hover:text-red-400 transition-colors"
                 >
                   <Trash2 className="w-3 h-3" />
-                  <span className="text-[8px] font-black uppercase tracking-widest leading-none">Clear</span>
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest leading-tight">Clear</span>
                 </button>
                 <button
                   onClick={() => setShowLoadModal(true)}
                   className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-2.5 py-2 bg-blue-500/5 text-blue-400/60 hover:text-blue-400 border border-blue-500/10 rounded-lg transition-colors"
                 >
                   <Upload className="w-3 h-3" />
-                  <span className="text-[8px] font-black uppercase tracking-widest leading-none">Load</span>
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest leading-tight">Load</span>
                 </button>
                 <button
                   onClick={() => setShowSaveModal(true)}
                   className="flex-[2] sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-teal-500 text-white font-black rounded-lg transition-all hover:bg-teal-400 active:scale-95 shadow-lg shadow-teal-500/20"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span className="text-[9px] font-black uppercase tracking-widest leading-none">STORE</span>
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest leading-tight">STORE</span>
                 </button>
               </div>
             </div>
@@ -756,6 +975,253 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Drum Modal */}
+      {showAddDrumModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 text-white">
+          <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold">添加音色</h3>
+              <button onClick={() => setShowAddDrumModal(false)} className="p-2 hover:bg-slate-700 rounded-full transition-colors">
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-slate-300">音色类型</label>
+                {(Object.keys(AVAILABLE_DRUM_TYPES) as DrumType[]).filter(type => !drumConfigs.some(d => d.type === type)).length === 0 ? (
+                  <div className="w-full bg-slate-700/50 border border-slate-600 rounded-lg p-3 text-white/50 text-center">
+                    所有音色类型已添加
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      value={newDrumType}
+                      onChange={(e) => {
+                        const type = e.target.value as DrumType;
+                        setNewDrumType(type);
+                        const defaultConfig = AVAILABLE_DRUM_TYPES[type];
+                        setNewDrumLabel(defaultConfig.label);
+                        setNewDrumColor(defaultConfig.color);
+                      }}
+                      className="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-teal-500 outline-none"
+                    >
+                      {(Object.keys(AVAILABLE_DRUM_TYPES) as DrumType[])
+                        .filter(type => !drumConfigs.some(d => d.type === type))
+                        .map(type => (
+                          <option key={type} value={type} className="bg-slate-700">
+                            {AVAILABLE_DRUM_TYPES[type].label}
+                          </option>
+                        ))}
+                    </select>
+                    {drumConfigs.some(d => d.type === newDrumType) && (
+                      <p className="text-xs text-red-400 mt-1">该音色类型已存在</p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-slate-300">显示名称</label>
+                <input
+                  type="text"
+                  value={newDrumLabel}
+                  onChange={(e) => setNewDrumLabel(e.target.value)}
+                  placeholder={AVAILABLE_DRUM_TYPES[newDrumType].label}
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-teal-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-slate-300">颜色</label>
+                <div className="grid grid-cols-5 gap-2">
+                  {COLOR_OPTIONS.map(color => (
+                    <button
+                      key={color.value}
+                      onClick={() => setNewDrumColor(color.value)}
+                      className={`h-10 rounded-lg border-2 transition-all ${
+                        newDrumColor === color.value
+                          ? 'border-teal-400 ring-2 ring-teal-400/50'
+                          : 'border-slate-600 hover:border-slate-500'
+                      } ${color.value}`}
+                      title={color.name}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowAddDrumModal(false)}
+                className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleAddDrum}
+                className="px-6 py-2 bg-teal-500 hover:bg-teal-600 text-white font-bold rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={drumConfigs.some(d => d.type === newDrumType) || (Object.keys(AVAILABLE_DRUM_TYPES) as DrumType[]).filter(type => !drumConfigs.some(d => d.type === type)).length === 0}
+              >
+                添加
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Drum Modal */}
+      {showEditDrumModal && editingDrum && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 text-white">
+          <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold">编辑音色</h3>
+              <button onClick={() => setShowEditDrumModal(false)} className="p-2 hover:bg-slate-700 rounded-full transition-colors">
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-slate-300">音色类型</label>
+                <select
+                  value={editDrumType}
+                  onChange={(e) => {
+                    const type = e.target.value as DrumType;
+                    setEditDrumType(type);
+                    // 更换音色类型时，不修改名字，只更新颜色为默认颜色
+                    const defaultConfig = AVAILABLE_DRUM_TYPES[type];
+                    setNewDrumColor(defaultConfig.color);
+                  }}
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-teal-500 outline-none"
+                >
+                  {(Object.keys(AVAILABLE_DRUM_TYPES) as DrumType[]).map(type => {
+                    const isUsed = drumConfigs.some(d => d.type === type && d.type !== editingDrum.type);
+                    return (
+                      <option 
+                        key={type} 
+                        value={type} 
+                        className="bg-slate-700"
+                        disabled={isUsed}
+                      >
+                        {AVAILABLE_DRUM_TYPES[type].label}{isUsed ? ' (已使用)' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                {editDrumType !== editingDrum.type && drumConfigs.some(d => d.type === editDrumType && d.type !== editingDrum.type) && (
+                  <p className="text-xs text-red-400 mt-1">该音色类型已被使用</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-slate-300">颜色</label>
+                <div className="grid grid-cols-5 gap-2">
+                  {COLOR_OPTIONS.map(color => (
+                    <button
+                      key={color.value}
+                      onClick={() => setNewDrumColor(color.value)}
+                      className={`h-10 rounded-lg border-2 transition-all ${
+                        newDrumColor === color.value
+                          ? 'border-teal-400 ring-2 ring-teal-400/50'
+                          : 'border-slate-600 hover:border-slate-500'
+                      } ${color.value}`}
+                      title={color.name}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center mt-6">
+              <button
+                onClick={() => {
+                  if (drumConfigs.length <= 1) {
+                    return;
+                  }
+                  handleDeleteDrum(editingDrum.type);
+                }}
+                className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded-lg transition-colors text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={drumConfigs.length <= 1}
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>删除</span>
+              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowEditDrumModal(false)}
+                  className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleEditDrum}
+                  className="px-6 py-2 bg-teal-500 hover:bg-teal-600 text-white font-bold rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={editDrumType !== editingDrum.type && drumConfigs.some(d => d.type === editDrumType && d.type !== editingDrum.type)}
+                >
+                  保存
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {showDeleteConfirm && drumToDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 text-white">
+          <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-red-400">确认删除</h3>
+              <button 
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDrumToDelete(null);
+                }} 
+                className="p-2 hover:bg-slate-700 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-slate-300 leading-relaxed">
+                确定要删除这个音色吗？删除后该音色在所有步骤中的设置将被清除。
+              </p>
+              {drumConfigs.find(d => d.type === drumToDelete) && (
+                <div className="mt-4 p-3 bg-slate-700/50 rounded-lg border border-slate-600">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-4 h-4 rounded ${drumConfigs.find(d => d.type === drumToDelete)?.color || 'bg-gray-500'}`} />
+                    <span className="font-medium text-white">
+                      {drumConfigs.find(d => d.type === drumToDelete)?.label}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDrumToDelete(null);
+                }}
+                className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmDeleteDrum}
+                className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg transition-colors text-sm flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                确认删除
+              </button>
             </div>
           </div>
         </div>

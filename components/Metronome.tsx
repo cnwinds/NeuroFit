@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Square } from 'lucide-react';
+import { Play, Square } from 'lucide-react';
 import { getAudioEngine, type DrumStep, type BeatPattern } from '../beats';
 
 interface MetronomeProps {
@@ -186,38 +186,35 @@ const Metronome: React.FC<MetronomeProps> = ({
   }, [isPlaying, pattern, onBeatStepChange]);
 
   const handleTogglePlay = useCallback(() => {
-    setIsPlaying(!isPlaying);
-  }, [isPlaying, setIsPlaying]);
-
-  const handleStop = useCallback(() => {
-    setIsPlaying(false);
-    setCurrentStep(0);
-    onBeatStepChange?.(0);
-    stepCountRef.current = 0;
-  }, [setIsPlaying, onBeatStepChange]);
+    if (isPlaying) {
+      // 如果正在播放，点击则停止并重置
+      setIsPlaying(false);
+      setCurrentStep(0);
+      onBeatStepChange?.(0);
+      stepCountRef.current = 0;
+    } else {
+      // 如果未播放，点击则开始播放
+      setIsPlaying(true);
+    }
+  }, [isPlaying, setIsPlaying, onBeatStepChange]);
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
       <button
         onClick={handleTogglePlay}
-        className="p-2 bg-teal-500 hover:bg-teal-600 text-white rounded-full transition-all active:scale-95"
-        aria-label={isPlaying ? '暂停' : '播放'}
+        className={`p-2 text-white rounded-full transition-all active:scale-95 ${
+          isPlaying 
+            ? 'bg-red-500 hover:bg-red-600' 
+            : 'bg-teal-500 hover:bg-teal-600'
+        }`}
+        aria-label={isPlaying ? '停止' : '播放'}
       >
         {isPlaying ? (
-          <Pause className="w-5 h-5 fill-current" />
+          <Square className="w-5 h-5 fill-current" />
         ) : (
           <Play className="w-5 h-5 fill-current" />
         )}
       </button>
-
-      <button
-        onClick={handleStop}
-        className="p-2 bg-slate-700 hover:bg-slate-600 text-white rounded-full transition-all active:scale-95"
-        aria-label="停止"
-      >
-        <Square className="w-4 h-4 fill-current" />
-      </button>
-
     </div>
   );
 };

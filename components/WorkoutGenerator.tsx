@@ -3,14 +3,17 @@ import React, { useState } from 'react';
 import { Difficulty, WorkoutPlan } from '../types';
 import { generateWorkoutPlanFromActions } from '../services/actionWorkoutGenerator';
 import { getAudioEngine } from '../beats/audioEngine';
-import { Zap, Clock, Activity, BrainCircuit, Rocket, Music, Sparkles } from 'lucide-react';
+import { Zap, Clock, Activity, BrainCircuit, Rocket, Music, Sparkles, Wand2 } from 'lucide-react';
+
+const IS_DEV = import.meta.env.DEV;
 
 interface Props {
   onPlanGenerated: (plan: WorkoutPlan) => void;
   onOpenBeatEditor?: () => void;
+  onOpenMocapEditor?: () => void;
 }
 
-const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor }) => {
+const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor, onOpenMocapEditor }) => {
   const [focus, setFocus] = useState('全身');
   const [duration, setDuration] = useState(7);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.BEGINNER);
@@ -157,11 +160,11 @@ const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor }
               className="flex-1 bg-gradient-to-r from-teal-500 to-blue-600 text-white font-black py-4 rounded-2xl shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-sm min-h-[56px]"
             >
               <Rocket className="w-5 h-5" />
-              开始生成
+              开始运动
             </button>
           </div>
 
-          {onOpenBeatEditor && (
+          {IS_DEV && onOpenBeatEditor && (
             <button
               type="button"
               onClick={onOpenBeatEditor}
@@ -169,6 +172,17 @@ const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor }
             >
               <Music className="w-5 h-5" />
               设计节奏
+            </button>
+          )}
+
+          {IS_DEV && onOpenMocapEditor && (
+            <button
+              type="button"
+              onClick={onOpenMocapEditor}
+              className="w-full bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-sm min-h-[56px]"
+            >
+              <Wand2 className="w-5 h-5" />
+              AI动作工坊
             </button>
           )}
         </div>

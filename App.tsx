@@ -34,29 +34,13 @@ const App: React.FC = () => {
                 setCurrentPlan(plan);
                 setCurrentPage('player');
               }}
-              onOpenBeatEditor={() => setCurrentPage('beat-editor')}
+              onOpenBeatEditor={IS_DEV ? () => setCurrentPage('beat-editor') : undefined}
+              onOpenMocapEditor={IS_DEV ? () => setCurrentPage('mocap') : undefined}
             />
-
-            {IS_DEV && (
-              <div className="mt-8">
-                <button
-                  onClick={() => setCurrentPage('mocap')}
-                  className="group relative flex items-center gap-4 bg-white/5 hover:bg-white/10 border border-white/10 px-10 py-5 rounded-[2rem] transition-all duration-300 shadow-xl"
-                >
-                  <div className="w-12 h-12 bg-teal-500 rounded-2xl flex items-center justify-center text-white group-hover:scale-110 group-hover:rotate-6 transition-transform">
-                    <Wand2 className="w-6 h-6" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-lg font-black italic uppercase tracking-tighter">AI 动作工坊</div>
-                    <div className="text-xs text-white/40 font-medium">录制并自动生成新动作代码</div>
-                  </div>
-                </button>
-              </div>
-            )}
           </div>
         )}
 
-        {currentPage === 'beat-editor' && (
+        {IS_DEV && currentPage === 'beat-editor' && (
           <BeatEditor
             onClose={() => setCurrentPage('home')}
             onSave={(pattern: SavedBeatPattern) => {
