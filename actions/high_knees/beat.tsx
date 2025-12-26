@@ -15,4 +15,6 @@ export const HighKneesBeat: BeatPattern = {
     [{ type: 'kick', volume: 1 }],
     [{ type: 'hihat', volume: 0.6 }]
   ],
+  totalBeats: 4,
+  beatFrameMapping: [0, 15, 30, 45]
 };

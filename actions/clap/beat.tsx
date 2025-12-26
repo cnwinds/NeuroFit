@@ -15,4 +15,6 @@ export const ClapBeat: BeatPattern = {
     [],
     []
   ],
+  totalBeats: 4,
+  beatFrameMapping: [0, 15, 30, 45]
 };

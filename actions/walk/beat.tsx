@@ -15,4 +15,6 @@ export const WalkBeat: BeatPattern = {
     [{ type: 'kick', volume: 0.8 }],
     [{ type: 'hihat', volume: 0.4 }]
   ],
+  totalBeats: 4,
+  beatFrameMapping: [0, 15, 30, 45]
 };

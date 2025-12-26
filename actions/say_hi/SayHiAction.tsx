@@ -11,7 +11,7 @@ import { SayHiBeat } from './beat';
 
 export const SayHiAction: ActionComponent = {
     name: '打招呼',
-    englishName: 'SAY HI',
+    englishName: 'say_hi',
     category: 'flexibility',
     targetParts: ['arms', 'shoulders'],
     durationSeconds: 15,

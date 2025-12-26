@@ -6,7 +6,7 @@ import { SquatBeat } from './beat';
 
 export const SquatAction: ActionComponent = {
     name: '深蹲',
-    englishName: 'SQUAT',
+    englishName: 'squat',
     category: 'strength',
     targetParts: ['legs'],
     durationSeconds: 45,

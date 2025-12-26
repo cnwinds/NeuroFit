@@ -2,25 +2,20 @@
  * CLAP动作组件
  */
 
-import React from 'react';
 import { ActionComponent } from '../base/ActionBase';
-import { GenericActionGuide } from '../base/GenericActionGuide';
-import { SimpleDetector } from '../base/SimpleDetector';
+import { Guide } from '../../components/Guide';
+import { GuideBasedDetector } from '../base/GuideBasedDetector';
 
 import { ClapBeat } from './beat';
+
 export const ClapAction: ActionComponent = {
     name: '鼓掌',
-    englishName: 'CLAP',
+    englishName: 'clap',
     category: 'cardio',
     targetParts: ['arms'],
     durationSeconds: 20,
-    Guide: (props) => <GenericActionGuide actionName="CLAP" {...props} />,
+    Guide: (props) => <Guide actionName="clap" {...props} />,
     Beat: ClapBeat,
-    Detector: new SimpleDetector({
-        type: 'distance',
-        points: [15, 16],
-        threshold: 0.1,
-        direction: 'less'
-    }),
+    Detector: new GuideBasedDetector('clap'),
     Display: () => null,
 };

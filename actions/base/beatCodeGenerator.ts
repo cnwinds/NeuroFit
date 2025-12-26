@@ -16,7 +16,7 @@ function formatPatternCode(pattern: any): string {
     const lines: string[] = [];
     pattern.forEach((step, index) => {
       if (Array.isArray(step) && step.length > 0) {
-        const stepCode = step.map(s => 
+        const stepCode = step.map(s =>
           `{ type: '${s.type}', volume: ${s.volume}${s.timeOffset ? `, timeOffset: ${s.timeOffset}` : ''} }`
         ).join(', ');
         lines.push(`    [${stepCode}]`);
@@ -27,7 +27,7 @@ function formatPatternCode(pattern: any): string {
     return `[\n${lines.join(',\n')}\n  ]`;
   } else {
     // 一维数组（DrumStep[]）
-    const stepCodes = pattern.map(s => 
+    const stepCodes = pattern.map(s =>
       `{ type: '${s.type}', volume: ${s.volume}${s.timeOffset ? `, timeOffset: ${s.timeOffset}` : ''} }`
     );
     return `[\n    ${stepCodes.join(',\n    ')}\n  ]`;
@@ -42,14 +42,14 @@ function formatPatternCode(pattern: any): string {
  */
 export function generateActionBeatCode(
   actionName: string,
-  beatPattern: { bpm: number; pattern: any; timeSignature?: [number, number]; swing?: number }
+  beatPattern: { bpm: number; pattern: any; timeSignature?: [number, number]; swing?: number; totalBeats?: number; beatFrameMapping?: number[] }
 ): string {
   // 将 action_name 转换为 ActionName 格式
   const className = actionName
     .split('_')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join('');
-  
+
   const varName = `${className}Beat`;
 
   // 格式化 pattern 数组
@@ -63,16 +63,25 @@ export function generateActionBeatCode(
   code += `import { BeatPattern } from '../base/ActionBase';\n\n`;
   code += `export const ${varName}: BeatPattern = {\n`;
   code += `  bpm: ${beatPattern.bpm},\n`;
-  
+
   if (beatPattern.timeSignature) {
     code += `  timeSignature: [${beatPattern.timeSignature[0]}, ${beatPattern.timeSignature[1]}],\n`;
   }
-  
+
   if (beatPattern.swing !== undefined && beatPattern.swing !== 0) {
     code += `  swing: ${beatPattern.swing},\n`;
   }
-  
+
   code += `  pattern: ${patternCode},\n`;
+
+  if (beatPattern.totalBeats !== undefined) {
+    code += `  totalBeats: ${beatPattern.totalBeats},\n`;
+  }
+
+  if (beatPattern.beatFrameMapping !== undefined && beatPattern.beatFrameMapping.length > 0) {
+    code += `  beatFrameMapping: [${beatPattern.beatFrameMapping.join(', ')}],\n`;
+  }
+
   code += `};\n`;
 
   return code;

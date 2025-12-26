@@ -4,20 +4,21 @@
  */
 
 import { ActionComponent } from '../base/ActionBase';
-import { JumpGuide } from './JumpGuide';
-import { JumpBeat } from './beat';
-import { JumpDetector } from './JumpDetector';
+import { Guide } from '../../components/Guide';
+import { GuideBasedDetector } from '../base/GuideBasedDetector';
 import { JumpDisplay } from './JumpDisplay';
+
+import { JumpBeat } from './beat';
 
 export const JumpAction: ActionComponent = {
   name: '跳跃',
-  englishName: 'JUMP',
+  englishName: 'jump',
   category: 'cardio',
   targetParts: ['legs'],
   durationSeconds: 30,
-  Guide: JumpGuide,
+  Guide: (props) => <Guide actionName="jump" {...props} />,
   Beat: JumpBeat,
-  Detector: new JumpDetector(),
+  Detector: new GuideBasedDetector('jump'),
   Display: JumpDisplay,
 };
 

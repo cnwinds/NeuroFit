@@ -2,25 +2,20 @@
  * WALK动作组件
  */
 
-import React from 'react';
 import { ActionComponent } from '../base/ActionBase';
-import { GenericActionGuide } from '../base/GenericActionGuide';
-import { SimpleDetector } from '../base/SimpleDetector';
+import { Guide } from '../../components/Guide';
+import { GuideBasedDetector } from '../base/GuideBasedDetector';
 
 import { WalkBeat } from './beat';
+
 export const WalkAction: ActionComponent = {
     name: '行走',
-    englishName: 'WALK',
+    englishName: 'walk',
     category: 'cardio',
     targetParts: ['legs'],
     durationSeconds: 60,
-    Guide: (props) => <GenericActionGuide actionName="WALK" {...props} />,
+    Guide: (props) => <Guide actionName="walk" {...props} />,
     Beat: WalkBeat,
-    Detector: new SimpleDetector({
-        type: 'height',
-        points: [25, 23], // 左膝 vs 左髋
-        threshold: 0.2,
-        direction: 'less'
-    }),
+    Detector: new GuideBasedDetector('walk'),
     Display: () => null,
 };

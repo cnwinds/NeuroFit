@@ -249,14 +249,13 @@ const ActionBeatEditor: React.FC<ActionBeatEditorProps> = ({ onClose }) => {
   // 构建节拍模式
   const buildBeatPattern = useCallback((): BeatPattern => {
     const patternArray: DrumStep[][] = Array(patternLength);
-    
+
     for (let i = 0; i < patternLength; i++) {
       if (i < pattern.length && pattern[i] !== undefined && pattern[i] !== null) {
         let step = pattern[i];
         if (!Array.isArray(step)) {
           step = [step];
         }
-        // 如果开启了 Solo 模式，只保留该乐器
         if (soloDrum) {
           patternArray[i] = step.filter(d => d.type === soloDrum);
         } else {
@@ -266,20 +265,27 @@ const ActionBeatEditor: React.FC<ActionBeatEditorProps> = ({ onClose }) => {
         patternArray[i] = [];
       }
     }
-    
+
     for (let i = 0; i < patternLength; i++) {
       if (patternArray[i] === undefined || patternArray[i] === null) {
         patternArray[i] = [];
       }
     }
-    
-    return {
+
+    const result: BeatPattern = {
       bpm,
       pattern: patternArray,
       timeSignature: [4, 4],
       swing
     };
-  }, [bpm, swing, patternLength, pattern, soloDrum]);
+
+    if (guideData && guideData.totalBeats) {
+      result.totalBeats = guideData.totalBeats;
+      result.beatFrameMapping = guideData.markedFrameIndices || [];
+    }
+
+    return result;
+  }, [bpm, swing, patternLength, pattern, soloDrum, guideData]);
 
   // 保存节拍到文件
   const handleSaveBeat = async () => {
@@ -290,20 +296,14 @@ const ActionBeatEditor: React.FC<ActionBeatEditorProps> = ({ onClose }) => {
     
     try {
       const beatPattern = buildBeatPattern();
-      const actionName = selectedAction.englishName.toLowerCase().replace(/\s+/g, '_');
-      
-      // 调用 API 保存节拍文件
+      const actionName = selectedAction.englishName;
+
       const response = await fetch('/api/save-beat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           actionName,
-          beatPattern: {
-            bpm: beatPattern.bpm,
-            pattern: beatPattern.pattern,
-            timeSignature: beatPattern.timeSignature,
-            swing: beatPattern.swing,
-          }
+          beatPattern
         })
       });
       
