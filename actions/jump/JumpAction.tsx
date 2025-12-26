@@ -5,7 +5,7 @@
 
 import { ActionComponent } from '../base/ActionBase';
 import { JumpGuide } from './JumpGuide';
-import { JumpBeat } from './JumpBeat';
+import { JumpBeat } from './beat';
 import { JumpDetector } from './JumpDetector';
 import { JumpDisplay } from './JumpDisplay';
 

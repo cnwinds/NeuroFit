@@ -2,6 +2,7 @@ import { ActionComponent } from '../base/ActionBase';
 import { SquatGuide } from './SquatGuide';
 import { SquatDetector } from './SquatDetector';
 
+import { SquatBeat } from './beat';
 export const SquatAction: ActionComponent = {
     name: '深蹲',
     englishName: 'SQUAT',
@@ -9,13 +10,7 @@ export const SquatAction: ActionComponent = {
     targetParts: ['legs'],
     durationSeconds: 45,
     Guide: (props) => <SquatGuide {...props} />,
-    Beat: {
-        bpm: 80,
-        pattern: [
-            { type: 'kick', volume: 1.0 },
-            { type: 'snare', volume: 0.8 },
-        ],
-    },
+    Beat: SquatBeat,
     Detector: new SquatDetector(),
     Display: () => null,
 };

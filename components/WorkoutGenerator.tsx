@@ -10,10 +10,11 @@ const IS_DEV = import.meta.env.DEV;
 interface Props {
   onPlanGenerated: (plan: WorkoutPlan) => void;
   onOpenBeatEditor?: () => void;
+  onOpenActionBeatEditor?: () => void;
   onOpenMocapEditor?: () => void;
 }
 
-const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor, onOpenMocapEditor }) => {
+const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor, onOpenActionBeatEditor, onOpenMocapEditor }) => {
   const [focus, setFocus] = useState('全身');
   const [duration, setDuration] = useState(7);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.BEGINNER);
@@ -172,6 +173,17 @@ const WorkoutGenerator: React.FC<Props> = ({ onPlanGenerated, onOpenBeatEditor, 
             >
               <Music className="w-5 h-5" />
               设计节奏
+            </button>
+          )}
+
+          {IS_DEV && onOpenActionBeatEditor && (
+            <button
+              type="button"
+              onClick={onOpenActionBeatEditor}
+              className="w-full bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-sm min-h-[56px]"
+            >
+              <Sparkles className="w-5 h-5" />
+              动作节拍编辑器
             </button>
           )}
 

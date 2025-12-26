@@ -4,10 +4,11 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { X, Play, Pause, Square, Save, Download, Upload, RotateCcw, Plus, Trash2, Edit2, Pencil } from 'lucide-react';
+import { X, Play, Pause, Square, Save, Download, Upload, RotateCcw, Plus, Trash2, Edit2, Pencil, Code } from 'lucide-react';
 import Metronome from './Metronome';
 import PageNavigator from './PageNavigator';
 import { type DrumType, type DrumStep, type BeatPattern, type SavedBeatPattern, getAudioEngine } from '../beats';
+import { generateBeatPatternCode, generateAllBeatPatternsCode, downloadCodeFile } from '../actions/base/beatCodeGenerator';
 
 interface BeatEditorProps {
   onClose?: () => void;
@@ -381,14 +382,13 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
     alert(`已加载模式 "${savedPattern.name}"`);
   }, []);
 
-  // 确认保存
+  // 确认保存 - 直接生成代码文件并下载
   const confirmSave = useCallback(() => {
     const beatPattern = buildBeatPattern();
 
     // 检查是否有同名模式
     const existingIndex = savedPatterns.findIndex(p => p.name === patternName);
 
-    let newPatterns: SavedBeatPattern[];
     let patternToSave: SavedBeatPattern;
 
     if (existingIndex >= 0) {
@@ -407,9 +407,6 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
         length: patternLength,
         updatedAt: Date.now()
       };
-
-      newPatterns = [...savedPatterns];
-      newPatterns[existingIndex] = patternToSave;
     } else {
       // 新建
       patternToSave = {
@@ -423,14 +420,26 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
         createdAt: Date.now(),
         updatedAt: Date.now()
       };
-      newPatterns = [...savedPatterns, patternToSave];
     }
 
+    // 生成 TypeScript 代码并自动下载
+    const code = generateBeatPatternCode(patternToSave);
+    const filename = `${patternName.replace(/\s+/g, '_')}.ts`;
+    downloadCodeFile(code, filename);
+
+    // 仍然保存到 localStorage（仅用于加载和编辑功能）
+    const newPatterns = existingIndex >= 0
+      ? savedPatterns.map((p, i) => i === existingIndex ? patternToSave : p)
+      : [...savedPatterns, patternToSave];
+    
     setSavedPatterns(newPatterns);
     localStorage.setItem('savedBeatPatterns', JSON.stringify(newPatterns));
 
     onSave?.(patternToSave);
     setShowSaveModal(false);
+    
+    // 提示用户
+    alert(`节拍模式 "${patternName}" 已保存为代码文件！\n文件已自动下载：${filename}\n请将文件放到 actions/beats/ 目录下使用。`);
   }, [buildBeatPattern, patternName, patternLength, onSave, savedPatterns]);
 
   // 加载特定模式
@@ -616,6 +625,32 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
     link.click();
     URL.revokeObjectURL(url);
   }, [buildBeatPattern, patternName, patternLength]);
+
+  // 导出当前节拍模式为 TypeScript 代码
+  const handleExportAsCode = useCallback(() => {
+    const beatPattern = buildBeatPattern();
+    const savedPattern: SavedBeatPattern = {
+      id: `pattern-${Date.now()}`,
+      name: patternName,
+      bpm: beatPattern.bpm,
+      pattern: beatPattern.pattern as DrumStep[][],
+      timeSignature: beatPattern.timeSignature || [4, 4],
+      swing: beatPattern.swing || 0,
+      length: patternLength,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    const code = generateBeatPatternCode(savedPattern);
+    const filename = `${patternName.replace(/\s+/g, '_')}.ts`;
+    downloadCodeFile(code, filename);
+  }, [buildBeatPattern, patternName, patternLength]);
+
+  // 导出所有保存的节拍模式为 TypeScript 代码
+  const handleExportAllAsCode = useCallback(() => {
+    const code = generateAllBeatPatternsCode();
+    downloadCodeFile(code, 'beatPatterns.ts');
+  }, []);
 
 
   // 检查单元格是否激活（步骤中是否包含该乐器且音量大于0）
@@ -901,6 +936,26 @@ const BeatEditor: React.FC<BeatEditorProps> = ({ onClose, onSave }) => {
                 >
                   <Save className="w-3.5 h-3.5" />
                   <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest leading-tight">STORE</span>
+                </button>
+              </div>
+
+              {/* 导出区 */}
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                <button
+                  onClick={handleExportAsCode}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-2.5 py-2 bg-purple-500/10 text-purple-400/60 hover:text-purple-400 border border-purple-500/20 hover:border-purple-500/40 rounded-lg transition-colors"
+                  title="导出当前节拍模式为 TypeScript 代码"
+                >
+                  <Code className="w-3 h-3" />
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest leading-tight">Code</span>
+                </button>
+                <button
+                  onClick={handleExportAllAsCode}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-2.5 py-2 bg-purple-500/10 text-purple-400/60 hover:text-purple-400 border border-purple-500/20 hover:border-purple-500/40 rounded-lg transition-colors"
+                  title="导出所有保存的节拍模式为 TypeScript 代码"
+                >
+                  <Download className="w-3 h-3" />
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest leading-tight">All</span>
                 </button>
               </div>
             </div>

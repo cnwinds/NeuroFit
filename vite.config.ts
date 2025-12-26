@@ -9,33 +9,95 @@ const isDev = process.env.NODE_ENV === 'development';
 const actionSaverPlugin: Plugin = {
   name: 'action-saver',
   configureServer(server) {
-    server.middlewares.use('/api/save-action', async (req: any, res: any) => {
-      if (req.method === 'POST') {
+    // Helper function to read request body
+    const readBody = (req: any): Promise<string> => {
+      return new Promise((resolve) => {
         let body = '';
         req.on('data', (chunk: any) => { body += chunk; });
-        req.on('end', async () => {
-          try {
-            const data = JSON.parse(body);
-            const { englishName, files } = data;
-            const actionDir = path.resolve(__dirname, 'actions', englishName.toLowerCase());
+        req.on('end', () => resolve(body));
+      });
+    };
 
-            if (!fs.existsSync(actionDir)) {
-              fs.mkdirSync(actionDir, { recursive: true });
-            }
+    // API: Save action files
+    server.middlewares.use(async (req: any, res: any, next: any) => {
+      if (req.url !== '/api/save-action') return next();
+      
+      if (req.method === 'POST') {
+        try {
+          const body = await readBody(req);
+          const data = JSON.parse(body);
+          const { englishName, files } = data;
+          const actionDir = path.resolve(__dirname, 'actions', englishName.toLowerCase());
 
-            for (const [filename, content] of Object.entries(files)) {
-              fs.writeFileSync(path.join(actionDir, filename), content as string);
-            }
-
-            res.statusCode = 200;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ success: true, path: actionDir }));
-          } catch (err: any) {
-            res.statusCode = 500;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ success: false, error: err.message }));
+          if (!fs.existsSync(actionDir)) {
+            fs.mkdirSync(actionDir, { recursive: true });
           }
-        });
+
+          for (const [filename, content] of Object.entries(files)) {
+            fs.writeFileSync(path.join(actionDir, filename), content as string);
+          }
+
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: true, path: actionDir }));
+        } catch (err: any) {
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: false, error: err.message }));
+        }
+      } else {
+        res.statusCode = 405;
+        res.end('Method Not Allowed');
+      }
+    });
+
+    // API: Save beat file
+    server.middlewares.use(async (req: any, res: any, next: any) => {
+      if (req.url !== '/api/save-beat') return next();
+      
+      if (req.method === 'POST') {
+        try {
+          const body = await readBody(req);
+          const data = JSON.parse(body);
+          const { actionName, beatPattern } = data;
+          
+          const actionDir = path.resolve(__dirname, 'actions', actionName);
+          const beatFilePath = path.join(actionDir, 'beat.tsx');
+
+          if (!fs.existsSync(actionDir)) {
+            throw new Error(`Action directory not found: ${actionDir}`);
+          }
+
+          // Generate beat code using our generator
+          const { generateActionBeatCode } = await import('./actions/base/beatCodeGenerator');
+          const beatCode = generateActionBeatCode(actionName, beatPattern);
+
+          // Save beat file
+          fs.writeFileSync(beatFilePath, beatCode, 'utf-8');
+
+          // Update Action file to use beat import
+          const actionFilePath = path.join(actionDir, `${actionName.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('')}Action.tsx`);
+          
+          if (fs.existsSync(actionFilePath)) {
+            const { updateActionFileToUseBeat } = await import('./actions/base/actionFileUpdater');
+            const actionFileContent = fs.readFileSync(actionFilePath, 'utf-8');
+            const updatedContent = updateActionFileToUseBeat(actionFileContent, actionName);
+            fs.writeFileSync(actionFilePath, updatedContent, 'utf-8');
+          }
+
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ 
+            success: true, 
+            path: beatFilePath,
+            actionFileUpdated: fs.existsSync(actionFilePath)
+          }));
+        } catch (err: any) {
+          console.error('Save beat error:', err);
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: false, error: err.message }));
+        }
       } else {
         res.statusCode = 405;
         res.end('Method Not Allowed');

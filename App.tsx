@@ -3,11 +3,12 @@ import React, { useState, lazy, Suspense } from 'react';
 import WorkoutGenerator from './components/WorkoutGenerator';
 import Player from './components/Player';
 import BeatEditor from './components/BeatEditor';
+import ActionBeatEditor from './components/ActionBeatEditor';
 import { WorkoutPlan } from './types';
 import { type SavedBeatPattern } from './beats';
 import { Wand2 } from 'lucide-react';
 
-type Page = 'home' | 'beat-editor' | 'player' | 'mocap';
+type Page = 'home' | 'beat-editor' | 'action-beat-editor' | 'player' | 'mocap';
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -35,6 +36,7 @@ const App: React.FC = () => {
                 setCurrentPage('player');
               }}
               onOpenBeatEditor={IS_DEV ? () => setCurrentPage('beat-editor') : undefined}
+              onOpenActionBeatEditor={IS_DEV ? () => setCurrentPage('action-beat-editor') : undefined}
               onOpenMocapEditor={IS_DEV ? () => setCurrentPage('mocap') : undefined}
             />
           </div>
@@ -47,6 +49,12 @@ const App: React.FC = () => {
               console.log('节拍模式已保存:', pattern);
               // 可以在这里添加将节拍应用到健身计划的逻辑
             }}
+          />
+        )}
+
+        {IS_DEV && currentPage === 'action-beat-editor' && (
+          <ActionBeatEditor
+            onClose={() => setCurrentPage('home')}
           />
         )}
 
