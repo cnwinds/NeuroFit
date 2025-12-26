@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Play, Pause, SkipBack, SkipForward, Check, Wand2, Save, ArrowLeft } from 'lucide-react';
 import { smoothActionFrames } from '../services/geminiService';
+import { drawSkeleton, SKELETON_COLOR, MARKER_COLOR, DEFAULT_FPS } from '../utils/skeletonDrawer';
 
 interface Props {
     recordedFrames: any[][];
@@ -26,7 +27,7 @@ const ActionMarkerEditor: React.FC<Props> = ({ recordedFrames, onClose, onSave }
     const lastFrameTimeRef = useRef<number>(0);
 
     const totalFrames = recordedFrames.length;
-    const framesPerSecond = 30;
+    const framesPerSecond = DEFAULT_FPS;
 
     useEffect(() => {
         if (canvasRef.current && recordedFrames.length > 0) {
@@ -79,23 +80,9 @@ const ActionMarkerEditor: React.FC<Props> = ({ recordedFrames, onClose, onSave }
 
         ctx.clearRect(0, 0, width, height);
 
-        const drawSkeleton = (landmarks: any[], w: number, h: number) => {
-            const connect = (i1: number, i2: number) => {
-                const s = landmarks[i1], e = landmarks[i2];
-                if (s && e) {
-                    ctx.beginPath();
-                    ctx.moveTo(s.x * w, s.y * h);
-                    ctx.lineTo(e.x * w, e.y * h);
-                    ctx.strokeStyle = markers.some(m => m.frameIndex === frameIndex) ? '#f97316' : '#2dd4bf';
-                    ctx.lineWidth = 4;
-                    ctx.lineCap = 'round';
-                    ctx.stroke();
-                }
-            };
-            [[11, 12], [11, 23], [12, 24], [23, 24], [11, 13], [13, 15], [12, 14], [14, 16], [23, 25], [25, 27], [24, 26], [26, 28]].forEach(pair => connect(pair[0], pair[1]));
-        };
-
-        drawSkeleton(landmarks, width, height);
+        drawSkeleton(ctx, landmarks, width, height, {
+            strokeColor: markers.some(m => m.frameIndex === frameIndex) ? MARKER_COLOR : SKELETON_COLOR
+        });
     };
 
     const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {

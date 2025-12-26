@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import type { GuideData } from '../actions/base/types';
+import { drawSkeleton } from '../utils/skeletonDrawer';
 
 interface Props {
   guideData: GuideData;
@@ -26,22 +27,7 @@ export const GuidePreview: React.FC<Props> = ({ guideData, beatStep, beatProgres
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (frame && frame.length > 0) {
-      const drawSkeleton = (landmarks: any[], w: number, h: number) => {
-        const connect = (i1: number, i2: number) => {
-          const s = landmarks[i1], e = landmarks[i2];
-          if (s && e) {
-            ctx.beginPath();
-            ctx.moveTo(s.x * w, s.y * h);
-            ctx.lineTo(e.x * w, e.y * h);
-            ctx.strokeStyle = '#2dd4bf';
-            ctx.lineWidth = 4;
-            ctx.lineCap = 'round';
-            ctx.stroke();
-          }
-        };
-        [[11, 12], [11, 23], [12, 24], [23, 24], [11, 13], [13, 15], [12, 14], [14, 16], [23, 25], [25, 27], [24, 26], [26, 28]].forEach(pair => connect(pair[0], pair[1]));
-      };
-      drawSkeleton(frame, canvas.width, canvas.height);
+      drawSkeleton(ctx, frame, canvas.width, canvas.height);
     }
   }, [guideData, beatStep, beatProgress]);
 

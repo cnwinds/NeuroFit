@@ -4,6 +4,7 @@ import { poseService } from '../services/poseService';
 import { PoseLandmarker } from "@mediapipe/tasks-vision";
 import { analyzeMovement } from '../services/geminiService';
 import ActionMarkerEditor from './ActionMarkerEditor';
+import { drawSkeleton, RECORDING_COLOR, SKELETON_COLOR, DEFAULT_FPS } from '../utils/skeletonDrawer';
 
 interface Props {
     onClose: () => void;
@@ -100,31 +101,15 @@ const MocapEditor: React.FC<Props> = ({ onClose }) => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             if (result.landmarks && result.landmarks[0]) {
                 const landmarks = result.landmarks[0];
-                drawSkeleton(ctx, landmarks, canvas.width, canvas.height);
+                drawSkeleton(ctx, landmarks, canvas.width, canvas.height, {
+                    strokeColor: state === MocapState.RECORDING ? RECORDING_COLOR : SKELETON_COLOR
+                });
 
                 if (state === MocapState.RECORDING) {
                     recordingBufferRef.current.push(landmarks);
                 }
             }
         });
-    };
-
-    const drawSkeleton = (ctx: CanvasRenderingContext2D, landmarks: any[], w: number, h: number) => {
-        ctx.save();
-        const connect = (i1: number, i2: number) => {
-            const s = landmarks[i1], e = landmarks[i2];
-            if (s && e) {
-                ctx.beginPath();
-                ctx.moveTo(s.x * w, s.y * h);
-                ctx.lineTo(e.x * w, e.y * h);
-                ctx.strokeStyle = state === MocapState.RECORDING ? "#ef4444" : "#2dd4bf";
-                ctx.lineWidth = 4;
-                ctx.lineCap = "round";
-                ctx.stroke();
-            }
-        };
-        [[11, 12], [11, 23], [12, 24], [23, 24], [11, 13], [13, 15], [12, 14], [14, 16], [23, 25], [25, 27], [24, 26], [26, 28]].forEach(pair => connect(pair[0], pair[1]));
-        ctx.restore();
     };
 
     const startRecording = () => {
@@ -302,7 +287,7 @@ export default \${actionName}Action;
                         <div className="absolute top-8 left-1/2 -translate-x-1/2 z-20 flex items-center gap-4 bg-red-600/20 border border-red-500/50 px-6 py-3 rounded-2xl backdrop-blur-md animate-pulse">
                             <div className="w-3 h-3 bg-red-500 rounded-full" />
                             <span className="font-black italic uppercase tracking-widest text-red-500">录制中 - 请重复做 3 遍动作</span>
-                            <span className="text-white/70 font-mono">{Math.floor(recordingBufferRef.current.length / 30)}s</span>
+                            <span className="text-white/70 font-mono">{Math.floor(recordingBufferRef.current.length / DEFAULT_FPS)}s</span>
                         </div>
                     )}
 

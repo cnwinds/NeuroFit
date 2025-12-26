@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { WorkoutPlan, PlayerState } from '../types';
 import { generateStickFigureAnimation } from '../services/geminiService';
 import { getAudioEngine, type DrumStep } from '../beats';
-import { Play, Pause, SkipForward, CheckCircle, Star, Loader2, Camera, X, Activity } from 'lucide-react';
+import { Play, Pause, SkipForward, CheckCircle, Loader2, X, Activity } from 'lucide-react';
 import { PoseLandmarker } from "@mediapipe/tasks-vision";
 import { getAction, ActionComponent } from '../actions';
 import { poseService } from '../services/poseService';
@@ -11,6 +11,7 @@ import { calculateScore } from '../services/scoreCalculator';
 import { CompletionEffect } from './CompletionEffect';
 import { loadGuideData } from '../actions/base/guideLoader';
 import { GuidePreview } from './GuidePreview';
+import { drawSkeletonWithHighlight } from '../utils/skeletonDrawer';
 
 interface Props {
   plan: WorkoutPlan;
@@ -249,29 +250,15 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
   };
 
   const drawStickFigure = (ctx: CanvasRenderingContext2D, landmarks: any[], w: number, h: number) => {
-    ctx.save();
-    const connect = (i1: number, i2: number) => {
-      const s = landmarks[i1], e = landmarks[i2];
-      if (s && e) {
-        ctx.beginPath();
-        ctx.moveTo(s.x * w, s.y * h);
-        ctx.lineTo(e.x * w, e.y * h);
-        ctx.strokeStyle = "#2dd4bf"; ctx.lineWidth = 10; ctx.shadowBlur = 20; ctx.shadowColor = "#2dd4bf";
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(s.x * w, s.y * h);
-        ctx.lineTo(e.x * w, e.y * h);
-        ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3; ctx.shadowBlur = 0;
-        ctx.stroke();
-      }
-    };
-    [[11, 12], [11, 23], [12, 24], [23, 24], [11, 13], [13, 15], [12, 14], [14, 16], [23, 25], [25, 27], [24, 26], [26, 28]].forEach(pair => connect(pair[0], pair[1]));
+    drawSkeletonWithHighlight(ctx, landmarks, w, h);
     if (landmarks[0]) {
       ctx.beginPath();
       ctx.arc(landmarks[0].x * w, landmarks[0].y * h, 10, 0, 2 * Math.PI);
-      ctx.fillStyle = "#ffffff"; ctx.shadowColor = "#fbbf24"; ctx.shadowBlur = 25; ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#fbbf24';
+      ctx.shadowBlur = 25;
+      ctx.fill();
     }
-    ctx.restore();
   };
 
   const handleActionComplete = useCallback((acc: number) => {

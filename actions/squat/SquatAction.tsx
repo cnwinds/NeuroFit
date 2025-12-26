@@ -1,3 +1,7 @@
+/**
+ * SQUAT动作组件
+ */
+
 import { ActionComponent } from '../base/ActionBase';
 import { Guide } from '../../components/Guide';
 import { GuideBasedDetector } from '../base/GuideBasedDetector';
