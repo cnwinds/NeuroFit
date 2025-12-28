@@ -30,10 +30,17 @@ export type BodyPart = 'arms' | 'legs' | 'core' | 'full-body' | 'shoulders' | 'b
 
 export type ActionCategory = 'cardio' | 'strength' | 'flexibility' | 'balance';
 
+// Landmark 格式：与 MediaPipe Pose 格式一致
+export interface Landmark {
+  x: number;
+  y: number;
+  z?: number;
+}
+
 export interface GuideData {
   totalBeats: number;
   framesPerBeat: number;
-  frames: number[][][];
+  frames: Landmark[][]; // 每帧是一个 Landmark 数组
   bpm: number;
   markedFrameIndices: number[];
   isLoop?: boolean; // 是否为循环动画

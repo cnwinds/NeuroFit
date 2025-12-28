@@ -1,7 +1,24 @@
 import { getStickFigureBase64, getPredefinedAnimation } from "./stickFigureAsset";
 import { GoogleGenAI } from "@google/genai";
-import type { GuideData } from "../actions/base/types";
+import type { GuideData, Landmark } from "../actions/base/types";
 import { DEFAULT_FPS } from "../utils/skeletonDrawer";
+
+// 辅助函数：将数组格式 [x, y, z] 转换为对象格式 { x, y, z }
+const convertArrayToLandmark = (arr: any): Landmark => {
+    if (Array.isArray(arr)) {
+        return { x: arr[0] || 0, y: arr[1] || 0, z: arr[2] || 0 };
+    }
+    // 如果已经是对象格式，直接返回
+    return arr as Landmark;
+};
+
+// 辅助函数：转换整个帧数组
+const convertFramesToLandmarks = (frames: any[]): Landmark[][] => {
+    return frames.map(frame => {
+        if (!Array.isArray(frame)) return [];
+        return frame.map(landmark => convertArrayToLandmark(landmark));
+    });
+};
 
 // 从环境变量获取 API key，不允许硬编码
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
@@ -159,7 +176,7 @@ ${JSON.stringify(simplifiedData)}
             const parsed = JSON.parse(jsonMatch[0]);
             
             // 确保最后一帧能平滑过渡到第一帧
-            const processedFrames = parsed.frames || [];
+            let processedFrames = parsed.frames || [];
             if (processedFrames.length > 0) {
                 const firstFrame = processedFrames[0];
                 const lastFrame = processedFrames[processedFrames.length - 1];
@@ -169,25 +186,28 @@ ${JSON.stringify(simplifiedData)}
                 for (let i = 0; i < 5; i++) {
                     const ratio = i / 5;
                     const transitionFrame = firstFrame.map((landmark: any, idx: number) => {
-                        const first = firstFrame[idx];
-                        const last = lastFrame[idx];
-                        return [
-                            last[0] * (1 - ratio) + first[0] * ratio,
-                            last[1] * (1 - ratio) + first[1] * ratio,
-                            last[2] * (1 - ratio) + first[2] * ratio
-                        ];
+                        const first = convertArrayToLandmark(firstFrame[idx]);
+                        const last = convertArrayToLandmark(lastFrame[idx]);
+                        return {
+                            x: last.x * (1 - ratio) + first.x * ratio,
+                            y: last.y * (1 - ratio) + first.y * ratio,
+                            z: (last.z || 0) * (1 - ratio) + (first.z || 0) * ratio
+                        };
                     });
                     transitionFrames.push(transitionFrame);
                 }
                 
                 // 将过渡帧插入到末尾
-                processedFrames.push(...transitionFrames);
+                processedFrames = [...processedFrames, ...transitionFrames];
             }
+            
+            // 转换数组格式为对象格式
+            const convertedFrames = convertFramesToLandmarks(processedFrames);
             
             return {
                 totalBeats: parsed.totalBeats || totalBeats,
                 framesPerBeat: parsed.framesPerBeat || framesPerBeat,
-                frames: processedFrames,
+                frames: convertedFrames,
                 bpm: bpm,
                 markedFrameIndices: [],
                 isLoop: true
@@ -258,10 +278,12 @@ ${JSON.stringify(simplifiedData)}
         const jsonMatch = text.match(/\{.*\}/s);
         if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
+            // 转换数组格式为对象格式
+            const convertedFrames = convertFramesToLandmarks(parsed.frames || []);
             return {
                 totalBeats: parsed.totalBeats || totalBeats,
                 framesPerBeat: parsed.framesPerBeat || framesPerBeat,
-                frames: parsed.frames || [],
+                frames: convertedFrames,
                 bpm: bpm,
                 markedFrameIndices: parsed.markedFrameIndices || []
             };
