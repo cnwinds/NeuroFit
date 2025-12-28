@@ -3,15 +3,22 @@ import { GoogleGenAI } from "@google/genai";
 import type { GuideData } from "../actions/base/types";
 import { DEFAULT_FPS } from "../utils/skeletonDrawer";
 
-// 优先使用环境变量，如果没有则使用硬编码的 key（仅用于开发）
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "AIzaSyCHTqhuIOKMkKmHZyozxckGXbvzYcd2pJ4";
+// 从环境变量获取 API key，不允许硬编码
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+
+if (!apiKey) {
+    throw new Error(
+        "请设置 VITE_GEMINI_API_KEY 环境变量。\n" +
+        "创建 .env.local 文件并添加: VITE_GEMINI_API_KEY=your_api_key_here"
+    );
+}
 
 // 调试：检查环境变量是否加载
 if (import.meta.env.DEV) {
     console.log("环境变量检查:", {
         VITE_GEMINI_API_KEY: import.meta.env.VITE_GEMINI_API_KEY ? "已设置" : "未设置",
         apiKeyLength: apiKey.length,
-        source: import.meta.env.VITE_GEMINI_API_KEY ? "环境变量" : "硬编码"
+        source: "环境变量"
     });
 }
 
