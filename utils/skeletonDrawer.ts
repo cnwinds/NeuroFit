@@ -8,6 +8,7 @@ export interface DrawSkeletonOptions {
   shadowColor?: string;
   shadowBlur?: number;
   lineCap?: CanvasLineCap;
+  mirror?: boolean; // 是否镜像绘制（用于匹配CSS镜像的视频）
 }
 
 export function drawSkeleton(
@@ -20,7 +21,8 @@ export function drawSkeleton(
   const {
     strokeColor = SKELETON_COLOR,
     lineWidth = DEFAULT_LINE_WIDTH,
-    lineCap = 'round'
+    lineCap = 'round',
+    mirror = false
   } = options;
 
   ctx.save();
@@ -39,8 +41,13 @@ export function drawSkeleton(
     const s = landmarks[i1], e = landmarks[i2];
     if (s && e) {
       ctx.beginPath();
-      ctx.moveTo(s.x * width, s.y * height);
-      ctx.lineTo(e.x * width, e.y * height);
+      // 如果启用镜像，需要翻转 x 坐标以匹配 CSS 镜像的视频
+      const x1 = mirror ? (1 - s.x) * width : s.x * width;
+      const y1 = s.y * height;
+      const x2 = mirror ? (1 - e.x) * width : e.x * width;
+      const y2 = e.y * height;
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
       ctx.stroke();
     }
   };

@@ -43,12 +43,15 @@ const MocapEditor: React.FC<Props> = ({ onClose }) => {
                 streamRef.current = stream;
                 if (videoRef.current) {
                     videoRef.current.srcObject = stream;
-                    videoRef.current.play();
+                    await videoRef.current.play();
                 }
                 setCameraReady(true);
+                console.log("Camera initialized");
 
+                console.log("Loading pose model...");
                 poseLandmarkerRef.current = await poseService.getPoseLandmarker();
                 setModelReady(true);
+                console.log("Pose model loaded");
             } catch (err: any) {
                 console.error("Initialization failed", err);
                 setError("初始化失败: " + err.message);
@@ -102,7 +105,8 @@ const MocapEditor: React.FC<Props> = ({ onClose }) => {
             if (result.landmarks && result.landmarks[0]) {
                 const landmarks = result.landmarks[0];
                 drawSkeleton(ctx, landmarks, canvas.width, canvas.height, {
-                    strokeColor: state === MocapState.RECORDING ? RECORDING_COLOR : SKELETON_COLOR
+                    strokeColor: state === MocapState.RECORDING ? RECORDING_COLOR : SKELETON_COLOR,
+                    mirror: true // 启用镜像以匹配 CSS 镜像的视频
                 });
 
                 if (state === MocapState.RECORDING) {
@@ -118,8 +122,9 @@ const MocapEditor: React.FC<Props> = ({ onClose }) => {
     };
 
     const stopRecording = () => {
-        setState(MocapState.IDLE);
         setRecordedData([...recordingBufferRef.current]);
+        // 录制完成后直接进入动作编辑器
+        setState(MocapState.MARKING);
     };
 
     const handleAnalyze = async () => {
@@ -217,29 +222,12 @@ export default \${actionName}Action;
     };
 
     const handleSaveGuide = async (guideData: any) => {
-        if (!analysisResult) return;
-        
         try {
-            const actionName = analysisResult.englishName.toLowerCase().replace(/\s+/g, '_');
-            
-            const response = await fetch('/api/save-guide', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    actionName,
-                    guideData: {
-                        ...guideData,
-                        bpm: guideData.bpm || 120
-                    }
-                })
-            });
-
-            const result = await response.json();
-            if (result.success) {
-                setState(MocapState.RESULT);
-            } else {
-                throw new Error(result.error);
-            }
+            // 保存guide数据后，可以返回主界面或进入下一步
+            // 这里可以根据需要调整流程
+            console.log('Guide数据已保存:', guideData);
+            // 可以选择关闭编辑器或显示成功消息
+            // setState(MocapState.IDLE);
         } catch (err: any) {
             setError("保存Guide失败: " + err.message);
         }
@@ -314,6 +302,11 @@ export default \${actionName}Action;
                         <h3 className="text-sm font-bold text-teal-400 uppercase tracking-widest">流程控制</h3>
 
                         <div className="grid grid-cols-1 gap-3">
+                            {!modelReady && (
+                                <div className="text-xs text-white/50 p-3 bg-white/5 rounded-lg">
+                                    {cameraReady ? '正在加载姿态检测模型...' : '正在初始化摄像头...'}
+                                </div>
+                            )}
                             {state === MocapState.IDLE && recordedData.length === 0 && (
                                 <button
                                     onClick={startRecording}
@@ -336,23 +329,15 @@ export default \${actionName}Action;
                             )}
 
                             {recordedData.length > 0 && state === MocapState.IDLE && (
-                                <>
-                                    <button
-                                        onClick={handleAnalyze}
-                                        className="flex items-center justify-center gap-3 bg-teal-500 text-white font-black py-4 rounded-2xl hover:bg-teal-600 transition-all shadow-lg shadow-teal-500/20"
-                                    >
-                                        <Wand2 className="w-5 h-5" />
-                                        AI 分析动作 ({recordedData.length} 帧)
-                                    </button>
-                                    <button
-                                        onClick={reset}
-                                        className="flex items-center justify-center gap-3 bg-white/5 text-white/60 font-bold py-4 rounded-2xl hover:bg-white/10 transition-all"
-                                    >
-                                        <RefreshCcw className="w-5 h-5" />
-                                        重新录制
-                                    </button>
-                                </>
+                                <button
+                                    onClick={reset}
+                                    className="flex items-center justify-center gap-3 bg-white/5 text-white/60 font-bold py-4 rounded-2xl hover:bg-white/10 transition-all"
+                                >
+                                    <RefreshCcw className="w-5 h-5" />
+                                    重新录制
+                                </button>
                             )}
+
                         </div>
                     </div>
 

@@ -458,7 +458,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
         </div>
 
         <div className="absolute bottom-6 right-6 w-32 h-24 md:w-48 md:h-36 bg-black rounded-2xl overflow-hidden border border-white/20 shadow-2xl z-50">
-          <video ref={videoRef} className="w-full h-full object-cover opacity-40" autoPlay playsInline muted></video>
+          <video ref={videoRef} className="w-full h-full object-cover opacity-40 mirror" autoPlay playsInline muted></video>
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-contain z-10 opactiy-90"></canvas>
 
           {/* User Skeleton Debug View Overlay */}
@@ -567,7 +567,7 @@ const Player: React.FC<Props> = ({ plan, onExit }) => {
       )}
 
       <div className="absolute bottom-36 right-4 z-40 w-24 md:w-32 aspect-[4/3] rounded-2xl overflow-hidden border border-white/20 bg-black shadow-2xl">
-        <video ref={videoRef} className="w-full h-full object-cover opacity-70" autoPlay playsInline muted></video>
+        <video ref={videoRef} className="w-full h-full object-cover opacity-70 mirror" autoPlay playsInline muted></video>
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 z-30 px-6 pb-10 flex flex-col gap-4 bg-gradient-to-t from-slate-900 to-transparent pt-20">

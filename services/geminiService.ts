@@ -1,8 +1,20 @@
 import { getStickFigureBase64, getPredefinedAnimation } from "./stickFigureAsset";
 import { GoogleGenAI } from "@google/genai";
 import type { GuideData } from "../actions/base/types";
+import { DEFAULT_FPS } from "../utils/skeletonDrawer";
 
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
+// 优先使用环境变量，如果没有则使用硬编码的 key（仅用于开发）
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "AIzaSyCHTqhuIOKMkKmHZyozxckGXbvzYcd2pJ4";
+
+// 调试：检查环境变量是否加载
+if (import.meta.env.DEV) {
+    console.log("环境变量检查:", {
+        VITE_GEMINI_API_KEY: import.meta.env.VITE_GEMINI_API_KEY ? "已设置" : "未设置",
+        apiKeyLength: apiKey.length,
+        source: import.meta.env.VITE_GEMINI_API_KEY ? "环境变量" : "硬编码"
+    });
+}
+
 const ai = new GoogleGenAI({ apiKey });
 
 export const analyzeMovement = async (landmarksSequence: any[]): Promise<any> => {
@@ -77,6 +89,110 @@ export const generateStickFigureAnimation = async (exerciseName: string, useStat
     const refImageBase64 = await getStickFigureBase64();
     return [`data:image/png;base64,${refImageBase64}`];
 }
+
+// 平滑处理并首尾衔接，生成可循环播放的动画
+export const smoothActionFramesWithLoop = async (
+    frames: number[][][],
+    bpm: number = 120,
+    framesPerBeat: number = 30
+): Promise<GuideData> => {
+    try {
+        if (!apiKey) {
+            throw new Error("请先设置 GEMINI_API_KEY 或 VITE_GEMINI_API_KEY 环境变量");
+        }
+
+        const simplifiedData = frames.map(frame =>
+            frame.map((lp: any) => ({
+                x: Math.round(lp.x * 1000) / 1000,
+                y: Math.round(lp.y * 1000) / 1000,
+                z: Math.round(lp.z * 1000) / 1000
+            }))
+        );
+
+        // 计算总拍数（基于帧数和BPM）
+        const durationSeconds = frames.length / DEFAULT_FPS;
+        const totalBeats = Math.ceil((durationSeconds * bpm) / 60);
+
+        const prompt = `
+你是一个专业的动作平滑处理AI。我会给你一段动作的骨骼点序列数据，这是一个完整的动作循环。
+
+请分析这段数据并执行平滑处理，生成可以无缝循环播放的动画帧序列。
+
+要求：
+1. 对原始帧序列进行平滑插值，确保动作流畅自然
+2. 总共生成 ${totalBeats * framesPerBeat} 帧完整动画
+3. **关键要求**：确保最后一帧和第一帧能够完美衔接，实现无缝循环
+4. 最后一帧的骨骼点位置应该平滑过渡到第一帧，形成一个完整的循环
+5. 返回格式为JSON对象：
+{
+  "totalBeats": ${totalBeats},
+  "framesPerBeat": ${framesPerBeat},
+  "frames": [...], // 完整的骨骼点序列，每个元素是 [landmark][x,y,z]，最后一帧应该能平滑过渡到第一帧
+  "isLoop": true // 标记为循环动画
+}
+
+原始数据序列（${frames.length} 帧）：
+${JSON.stringify(simplifiedData)}
+
+请务必只返回 JSON 格式，不要有任何多余的解释。确保最后一帧能平滑过渡到第一帧。
+`;
+
+        const result = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt
+        });
+
+        const text = result.text;
+        if (!text) {
+            throw new Error("AI 返回内容为空");
+        }
+
+        const jsonMatch = text.match(/\{.*\}/s);
+        if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            
+            // 确保最后一帧能平滑过渡到第一帧
+            const processedFrames = parsed.frames || [];
+            if (processedFrames.length > 0) {
+                const firstFrame = processedFrames[0];
+                const lastFrame = processedFrames[processedFrames.length - 1];
+                
+                // 在最后一帧和第一帧之间添加过渡帧
+                const transitionFrames = [];
+                for (let i = 0; i < 5; i++) {
+                    const ratio = i / 5;
+                    const transitionFrame = firstFrame.map((landmark: any, idx: number) => {
+                        const first = firstFrame[idx];
+                        const last = lastFrame[idx];
+                        return [
+                            last[0] * (1 - ratio) + first[0] * ratio,
+                            last[1] * (1 - ratio) + first[1] * ratio,
+                            last[2] * (1 - ratio) + first[2] * ratio
+                        ];
+                    });
+                    transitionFrames.push(transitionFrame);
+                }
+                
+                // 将过渡帧插入到末尾
+                processedFrames.push(...transitionFrames);
+            }
+            
+            return {
+                totalBeats: parsed.totalBeats || totalBeats,
+                framesPerBeat: parsed.framesPerBeat || framesPerBeat,
+                frames: processedFrames,
+                bpm: bpm,
+                markedFrameIndices: [],
+                isLoop: true
+            };
+        }
+
+        throw new Error("AI 返回格式错误");
+    } catch (error) {
+        console.error("Gemini Smooth Loop Error:", error);
+        throw error;
+    }
+};
 
 export const smoothActionFrames = async (
     markedFrames: number[][][],

@@ -36,5 +36,6 @@ export interface GuideData {
   frames: number[][][];
   bpm: number;
   markedFrameIndices: number[];
+  isLoop?: boolean; // 是否为循环动画
 }
 
